@@ -1,0 +1,52 @@
+server:
+  port: 19110
+
+spring:
+  application:
+    name: pyin-plugin-file
+  datasource:
+    url: ${PYIN_FILE_DB_URL:jdbc:h2:file:./pyin-distribution-parent/runtime/pyin-config-center-runtime/data/pyin-plugin-file;MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    username: ${PYIN_FILE_DB_USERNAME:sa}
+    password: ${PYIN_FILE_DB_PASSWORD:}
+    driver-class-name: ${PYIN_FILE_DB_DRIVER:org.h2.Driver}
+
+pyin:
+  plugin:
+    center-url: ${PYIN_CENTER_URL:http://127.0.0.1:8080}
+    plugin-id: file
+    advertise-base-url: ${PYIN_FILE_ADVERTISE_BASE_URL:http://127.0.0.1:19110}
+    heartbeat-interval-ms: 15000
+    resources:
+      locations:
+        - file:./pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/external/file/web/
+        - classpath:/plugin-static/{pluginId}/
+      remote-entry-file: remoteEntry.js
+      assets-dir: assets/
+  center:
+    file-storage:
+      type: LOCAL_OSS
+      root-path: ${PYIN_FILE_STORAGE_ROOT:./pyin-distribution-parent/runtime/pyin-config-center-runtime/data/plugin-data/file-storage}
+      default-bucket: business
+      max-file-size-bytes: 20971520
+      max-request-size-bytes: 104857600
+      buckets:
+        avatar:
+          description: 用户头像桶
+          public-read: true
+          allowed-types: [jpg, jpeg, png, webp]
+        notice:
+          description: 通知公告桶
+          public-read: true
+          allowed-types: [jpg, jpeg, png, webp, pdf]
+        contract:
+          description: 合同附件桶
+          public-read: false
+          allowed-types: [pdf, doc, docx, xls, xlsx]
+        business:
+          description: 默认业务附件桶
+          public-read: false
+          allowed-types: [jpg, jpeg, png, pdf, doc, docx, xls, xlsx, zip]
+        temp:
+          description: 临时文件桶
+          public-read: false
+          allowed-types: [jpg, jpeg, png, pdf, xls, xlsx]

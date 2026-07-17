@@ -1,0 +1,55 @@
+server:
+  port: 8081
+  servlet:
+    context-path: /plugins
+spring:
+  application:
+    name: pyin-config-center
+  datasource:
+    url: ${PYIN_DB_URL:jdbc:h2:file:./pyin-distribution-parent/runtime/pyin-config-center-runtime/data/pyin-config-center;MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    username: ${PYIN_DB_USERNAME:sa}
+    password: ${PYIN_DB_PASSWORD:}
+    driver-class-name: ${PYIN_DB_DRIVER:org.h2.Driver}
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: assign_id
+
+sa-token:
+  token-name: Authorization
+  timeout: 2592000
+  active-timeout: -1
+  is-share: false
+  is-log: true
+
+pyin:
+  plugin:
+    resources:
+      locations:
+        - classpath:/plugin-static/{pluginId}/
+      remote-entry-file: remoteEntry.js
+      assets-dir: assets/
+      plugins:
+        dict:
+          locations:
+            - file:./pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/system/dict/web/
+            - classpath:/plugin-static/{pluginId}/
+        config:
+          locations:
+            - file:./pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/system/config/web/
+            - classpath:/plugin-static/{pluginId}/
+        file:
+          locations:
+            - file:./pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/external/file/web/
+            - classpath:/plugin-static/{pluginId}/
+  center:
+    plugin-runtime:
+      source-plugins-dir: pyin-plugins
+      runtime-root: pyin-distribution-parent/runtime/pyin-config-center-runtime
+      bundled-plugins-dir: pyin-distribution-parent/bundled-plugins
+      system-plugins-dir: pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/system
+      external-plugins-dir: pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/external

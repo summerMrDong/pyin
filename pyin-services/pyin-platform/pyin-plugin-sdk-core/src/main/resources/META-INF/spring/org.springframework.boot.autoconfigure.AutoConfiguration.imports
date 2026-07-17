@@ -1,0 +1,2 @@
+com.pyin.plugin.sdk.resource.PluginResourceAutoConfiguration
+com.pyin.plugin.sdk.web.PluginWebMvcAutoConfiguration

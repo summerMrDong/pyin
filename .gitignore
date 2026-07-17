@@ -1,0 +1,76 @@
+# IDE and local workspace
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Java and Maven build output
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+dependency-reduced-pom.xml
+release.properties
+.flattened-pom.xml
+
+# Frontend dependencies, build output, and caches
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+**/.turbo/
+**/.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data and generated distribution content
+**/pyin-distribution-parent/runtime/
+**/pyin-distribution-parent/bundled-plugins/
+**/runtime/pyin-config-center-runtime/
+**/plugins/system/
+**/plugins/external/
+**/data/*.db
+**/data/*.lock.db
+**/data/*.mv.db
+**/data/*.trace.db
+
+# Logs and temporary files
+logs/
+**/logs/
+*.log
+*.tmp
+*.temp
+*.pid
+*.seed
+*.bak
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Plugin static artifacts generated from frontend builds
+pyin-plugins/**/backend/src/main/resources/plugin-static/**
+!pyin-plugins/**/backend/src/main/resources/plugin-static/.gitkeep
+!pyin-plugins/**/backend/src/main/resources/plugin-static/*/.gitkeep
+
+# Plugin package artifacts
+*.zip
+*.tar
+*.tar.gz
+*.tgz
