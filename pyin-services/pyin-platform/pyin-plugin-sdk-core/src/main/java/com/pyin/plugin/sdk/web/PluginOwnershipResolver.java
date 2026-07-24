@@ -21,14 +21,14 @@ public class PluginOwnershipResolver {
     }
 
     public boolean belongsToPlugin(Class<?> controllerClass, PyinPlugin plugin) {
-        return resolvePluginId(controllerClass).equals(plugin.pluginId());
+        return resolvePluginId(controllerClass).equals(plugin.manifest().getPluginId());
     }
 
     private PluginOwner resolveOwner(Class<?> controllerClass) {
         String controllerPackage = ClassUtils.getPackageName(controllerClass);
         List<PluginOwner> matches = plugins.stream()
                 .map(plugin -> new PluginOwner(
-                        plugin.pluginId(),
+                        plugin.manifest().getPluginId(),
                         ClassUtils.getPackageName(AopUtils.getTargetClass(plugin))
                 ))
                 .filter(owner -> controllerPackage.startsWith(owner.packagePrefix()))

@@ -20,6 +20,12 @@ export default defineConfig({
   },
   server: {
     port: 4176,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:8080',
+      '/open': 'http://127.0.0.1:8080',
+      '/plugins': 'http://127.0.0.1:8080',
+      '/plugin-static': 'http://127.0.0.1:8080'
+    }
   }
 })

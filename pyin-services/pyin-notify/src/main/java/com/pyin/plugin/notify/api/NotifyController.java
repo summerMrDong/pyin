@@ -19,7 +19,7 @@ public class NotifyController {
         this.notifyService = notifyService;
     }
 
-    @GetMapping("/capi/events/stream")
+    @GetMapping("/open/events/stream")
     public SseEmitter stream() {
         return notifyService.connect();
     }

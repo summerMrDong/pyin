@@ -55,7 +55,7 @@ public class PluginRegistry {
 
     public RegisteredPlugin registerStandalone(PluginNodeRegistration registration) {
         RegisteredPlugin plugin = new RegisteredPlugin(
-                registration.getPluginId(),
+                registration.getDescriptor().getPluginId(),
                 registration.getNodeId(),
                 registration.getDescriptor(),
                 null,

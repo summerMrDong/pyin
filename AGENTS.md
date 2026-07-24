@@ -74,12 +74,52 @@ target/                                    Maven 构建产物，不是源码目�
 
 禁止把 `bundled-plugins/`、`runtime/`、`dist/`、`target/` 当成插件源码目录进行开发。
 
-插件类型判断规则：
+插件运行来源由平台加载入口决定：
 
 ```text
-PluginType.SYSTEM    字典、配置等随系统发布的默认插件
-PluginType.EXTERNAL  业务扩展插件、独立交付插件
+PluginSourceType.EMBEDDED_SYSTEM  仅限中心 classpath 内且位于 embedded-plugin-ids 白名单的系统插件
+PluginSourceType.STANDALONE_NODE   独立插件进程通过节点注册协议接入中心
 ```
+
+不得在 Manifest 中声明或恢复 `pluginType`、`runtimeMode`。外部插件不得进入中心 classpath；未通过平台
+白名单的 `PyinPlugin` Bean 不得注册为内嵌插件。
+
+### 插件公共契约/API 模块约束
+
+插件只有在存在真实跨模块、跨插件公共能力时，才新增 `api` Maven 子模块；不得为空能力提前创建空 `api` 模块。
+
+插件公共能力统一采用：
+
+```text
+pyin-plugins/pyin-plugin-<name>/api
+artifactId：pyin-plugin-<name>-api
+package：com.pyin.plugin.<name>.api
+```
+
+`api` 模块必须只放稳定契约、DTO/View、少量确有必要的公共工具，不得依赖插件 `backend`，不得放业务实现、Controller、Repository、Entity 持久化对象。
+
+`api` 包结构必须按职责分层：
+
+```text
+api/service    公共服务接口契约
+api/model      跨模块传输 DTO / View / Identity
+api/support    公共工具、常量、辅助类型；没有真实工具时不得创建空包
+```
+
+所有 `*-api`、`*-spi`、`*-sdk` 等契约模块中的 public 接口、record、DTO、View、Identity、异常、枚举，都必须编写详细中文 JavaDoc。
+
+JavaDoc 必须满足：
+
+```text
+1. public 类型必须说明职责边界、适用调用方、是否允许跨模块或跨插件调用。
+2. public 接口的每个方法必须说明用途、参数、返回值、空值约定、异常或失败语义。
+3. record / DTO / View / Identity 必须说明模型用途，并用 @param 说明每个字段含义。
+4. 涉及密码、Secret、Token、签名、权限、用户身份等敏感字段，必须说明安全使用边界。
+5. deprecated 契约必须说明废弃原因和推荐替代契约。
+6. 不允许在契约模块中留下无注释的 public 类型或方法。
+```
+
+AI 在提交契约/API 模块改动前，必须自查所有新增或修改的 public 类型和方法是否具备中文 JavaDoc；缺失时不得认为任务完成。
 
 ### 后端实现约束
 
@@ -103,21 +143,12 @@ PyinPlugin.manifest()
 pluginId
 pluginName
 pluginVersion
-pluginType
-runtimeMode
 basePath
 entryJs
-remoteName
-exposedModule
 ```
 
-只有独立插件（`PluginRuntimeMode.STANDALONE`）才需要额外填写：
-
-```text
-backendBaseUrl
-frontendBaseUrl
-healthUrl
-```
+独立插件的后端地址、前端地址、健康检查地址由其节点注册协议提交；运行来源由平台写入
+`PluginSourceType`，不属于插件 Manifest。
 
 API、权限、路由、资源默认遵循“自动扫描 + 自动装配”：
 
@@ -126,6 +157,10 @@ API、权限、路由、资源默认遵循“自动扫描 + 自动装配”：
 前端路由：优先由 frontend 模块联邦暴露的 routes.ts 提供
 resources：优先由装配器自动生成
 ```
+
+`pluginId` 是 `PluginManifest` 的唯一事实来源。插件入口不得实现或新增 `PyinPlugin.pluginId()`；
+必须使用 `PluginManifest.builder("<pluginId>")` 创建清单，构建器不提供无参入口，也不再提供
+重复设置 ID 的链式方法。
 
 除非确有必要，AI 不应手工覆盖 `permissions`、`apis`、`resources`。
 
@@ -181,21 +216,22 @@ frontend/src/exposed/
 └── routes.ts
 ```
 
-路由与菜单约束：
+工作区路由约束：
 
 ```text
-以 routes.ts 中的路由定义为主
-菜单由后端 PyinPlugin.menus() 提供
-前端不再暴露 menus.ts，也不生成 routes.json
+主前端壳只展示插件工作区标签；标签点击后固定跳转 /plugins/{pluginId}
+每个插件必须通过模块联邦暴露 ./routes，且 routes.ts 必须声明精确的 /plugins/{pluginId} 入口路由
+routes.ts 是插件页面与内部导航的唯一事实来源；壳应用动态注册该路由，不推导或补充页面路由
+插件内部子路由必须位于 /plugins/{pluginId}/**，由插件自行决定是否使用菜单、页签、树或单页布局
+PyinPlugin 不再提供 menus()；不得新增 PluginMenu、menus.ts、routes.json 或后端菜单树
 ```
 
 一致性约束：
 
 ```text
-manifest().remoteName          必须与模块联邦 name 一致
-manifest().exposedModule       必须与 exposes 的主应用模块名一致
-src/exposed/<PluginRemoteApp>.vue  必须与 exposedModule 指向的文件一致
+模块联邦 name                  必须等于 pluginId；壳应用据此加载远端
 entryJs                        必须与运行时暴露的 remoteEntry.js 路径一致
+./routes                       必须在 exposes 中；插件可额外暴露任意组件、组合式函数或前端能力供其他插件引用
 ```
 
 ### 打包与运行约束
@@ -220,12 +256,14 @@ plugin.yml
 把 plugin.yml 当作部署必需文件
 ```
 
-运行模式判断：
+运行来源判断：
 
 ```text
-EMBEDDED    随中心进程内嵌运行
-STANDALONE  作为独立插件进程运行，并向中心注册
+EMBEDDED_SYSTEM  中心从受控 classpath 装配，且 pluginId 必须在 embedded-plugin-ids 白名单中
+STANDALONE_NODE   插件独立启动并通过节点注册协议向中心注册
 ```
+
+插件作者不得通过 Manifest 选择运行来源；来源不明确或不符合部署策略时，平台必须拒绝注册。
 
 ### AI 工作流程与交付要求
 
@@ -243,7 +281,7 @@ pyin-plugins/pyin-plugin-file
 1. 先补最小可运行插件骨架
 2. 再补 manifest 基础字段
 3. 再补控制器、接口与权限
-4. 再补后端 menus 与前端 exposed、routes
+4. 再补前端 exposed、routes 与插件内部导航
 5. 最后补业务实现、打包与验证
 ```
 
@@ -263,7 +301,7 @@ AI 交付插件相关改动时，必须明确说明：
 ```text
 新增了哪些接口
 新增了哪些权限
-新增了哪些前端路由与菜单
+新增了哪些前端路由与插件内部导航方式
 采用了哪种运行模式
 打包入口和前端 remoteEntry.js 如何对应
 ```
@@ -401,7 +439,6 @@ Java PluginManifest
 backend jar
 frontend remoteEntry.js
 web assets
-菜单
 权限
 路由
 API
@@ -801,13 +838,14 @@ PluginContext
 PluginLifecycle
 PluginDescriptor
 PluginAccessMode
-PluginMenuProvider
-PluginRouteProvider
 PluginPermissionProvider
 PluginApiDefinition
 PluginEvent
 PluginEventPublisher
 ```
+
+插件 SPI 不包含 `PluginMenu`、`PluginMenuProvider` 或其他平台级菜单契约；插件页面路由由前端
+`./routes` 模块声明。
 
 ---
 
@@ -883,8 +921,7 @@ PluginEventPublisher
 插件升级
 插件状态监听
 插件健康检查
-插件菜单注册
-插件路由注册
+插件工作区注册信息维护
 插件权限注册
 插件 API 注册
 ```
@@ -913,10 +950,10 @@ pyin-plugin-runtime/
 
 ```text
 管理端网关：
-/api/plugins/{pluginId}/admin/**
+/plugins/{pluginId}/admin/**
 
 C端 SDK 网关：
-/capi/plugins/{pluginId}/client/**
+/plugins/{pluginId}/open/**
 ```
 
 管理端网关使用后台用户鉴权。
@@ -955,7 +992,7 @@ SSE / WebSocket 推送
 C端 SDK 统一事件通道：
 
 ```text
-GET /capi/events/stream
+GET /open/events/stream
 ```
 
 ---
@@ -975,8 +1012,8 @@ Pyin 主前端壳。
 插件管理
 接入凭证管理
 系统设置
-动态加载插件菜单
-动态加载插件页面
+动态加载插件工作区标签
+动态加载插件页面路由
 ```
 
 插件页面通过模块联邦加载。
@@ -1116,8 +1153,6 @@ pyin:
       mode: ACCESS_KEY
       access-key: cck_xxxxx
       access-secret: ccs_xxxxx
-      auto-refresh: true
-      token-refresh-before-seconds: 300
 
     notify:
       enabled: true
@@ -1363,7 +1398,7 @@ Java 类接口调用
 字典 SDK 收到事件后，可以重新拉取字典：
 
 ```java
-context.httpClient().get("/capi/plugins/dict/client/dict/items?typeCode=gender");
+context.httpClient().get("/plugins/dict/open/dict/items?typeCode=gender");
 ```
 
 ---
@@ -1540,9 +1575,7 @@ notice-plugin/
 │       ├── service/
 │       ├── mapper/
 │       ├── entity/
-│       ├── menu/
 │       ├── permission/
-│       ├── route/
 │       ├── event/
 │       └── migration/
 │
@@ -1586,22 +1619,12 @@ notice-plugin/
 public class NoticePlugin implements PyinPlugin {
 
     @Override
-    public String pluginId() {
-        return "notice";
-    }
-
-    @Override
     public PluginManifest manifest() {
-        return PluginManifest.builder()
-                .pluginId("notice")
+        return PluginManifest.builder("notice")
                 .pluginName("公告插件")
-                .pluginType(PluginType.EXTERNAL)
-                .runtimeMode(PluginRuntimeMode.EMBEDDED)
                 .pluginVersion("1.0.0")
                 .basePath("/plugins/notice")
                 .entryJs("/plugin-static/notice/remoteEntry.js")
-                .remoteName("notice")
-                .exposedModule("./NoticeRemoteApp")
                 .build();
     }
 
@@ -1685,7 +1708,7 @@ C端 SDK 接口：
 
 ```java
 @PluginClientController
-@RequestMapping("/client/notice")
+@OpenMapping("/notice")
 public class NoticeClientController {
 
     @GetMapping("/list")
@@ -1761,22 +1784,12 @@ signature 是否正确
 public class NoticePlugin implements PyinPlugin {
 
     @Override
-    public String pluginId() {
-        return "notice";
-    }
-
-    @Override
     public PluginManifest manifest() {
-        return PluginManifest.builder()
-                .pluginId("notice")
+        return PluginManifest.builder("notice")
                 .pluginName("公告插件")
-                .pluginType(PluginType.EXTERNAL)
-                .runtimeMode(PluginRuntimeMode.EMBEDDED)
                 .pluginVersion("1.0.0")
                 .basePath("/plugins/notice")
                 .entryJs("/plugin-static/notice/remoteEntry.js")
-                .remoteName("notice")
-                .exposedModule("./NoticeRemoteApp")
                 .build();
     }
 }
@@ -1791,23 +1804,23 @@ public class NoticePlugin implements PyinPlugin {
 配置插件必须提供：
 
 ```text
-GET /client/config/value
-GET /client/config/namespace
-GET /client/config/version
+GET /config/value
+GET /config/namespace
+GET /config/version
 ```
 
 经过 Pyin 网关后的完整路径：
 
 ```text
-GET /capi/plugins/config/client/config/value
-GET /capi/plugins/config/client/config/namespace
-GET /capi/plugins/config/client/config/version
+GET /plugins/config/open/config/value
+GET /plugins/config/open/config/namespace
+GET /plugins/config/open/config/version
 ```
 
 配置变更统一走 Pyin 通知通道：
 
 ```text
-GET /capi/events/stream
+GET /open/events/stream
 ```
 
 配置变更流程：
@@ -1830,17 +1843,17 @@ pyin-client-config-sdk
 字典插件必须提供：
 
 ```text
-GET /client/dict/label
-GET /client/dict/items
-GET /client/dict/batch
+GET /dict/label
+GET /dict/items
+GET /dict/batch
 ```
 
 经过 Pyin 网关后的完整路径：
 
 ```text
-GET /capi/plugins/dict/client/dict/label
-GET /capi/plugins/dict/client/dict/items
-GET /capi/plugins/dict/client/dict/batch
+GET /plugins/dict/open/dict/label
+GET /plugins/dict/open/dict/items
+GET /plugins/dict/open/dict/batch
 ```
 
 字典变更事件：
@@ -1884,7 +1897,8 @@ export default defineConfig({
       filename: 'remoteEntry.js',
       exposes: {
         './NoticeRemoteApp': './src/exposed/NoticeRemoteApp.vue',
-        './routes': './src/exposed/routes.ts'
+        './routes': './src/exposed/routes.ts',
+        './NoticePicker': './src/components/NoticePicker.vue'
       },
       shared: ['vue', 'vue-router', 'pinia']
     })
@@ -1962,67 +1976,89 @@ pyin-distribution-parent/runtime/pyin-config-center-runtime/
 
 # 15. 核心接口
 
-## 15.1 后台管理接口
+## 15.1 后台基础鉴权接口
 
 ```text
 POST   /api/auth/login
 POST   /api/auth/logout
 GET    /api/auth/current-user
+```
 
-GET    /api/users
-POST   /api/users
-PUT    /api/users/{id}
-DELETE /api/users/{id}
+`routes.ts` 是壳应用动态加载的固定入口，最小实现如下；点击 `notice` 插件时壳应用会注册并跳转到
+`/plugins/notice`。额外暴露模块不需要写入该路由文件，也不会被壳应用自动加载。
 
-GET    /api/roles
-POST   /api/roles
-PUT    /api/roles/{id}
-DELETE /api/roles/{id}
+```ts
+import NoticeRemoteApp from './NoticeRemoteApp.vue'
 
-GET    /api/permissions
-POST   /api/roles/{id}/permissions
-
-GET    /api/core/client-credentials
-POST   /api/core/client-credentials
-POST   /api/core/client-credentials/{id}/enable
-POST   /api/core/client-credentials/{id}/disable
-POST   /api/core/client-credentials/{id}/rotate-secret
-GET    /api/core/client-credentials/{id}/request-logs
+export default [
+  {
+    path: '/plugins/notice',
+    name: 'plugin-notice',
+    component: NoticeRemoteApp
+  }
+]
 ```
 
 ---
 
-## 15.2 插件管理接口
+## 15.2 系统插件管理接口
+
+系统管理能力由运行时 ID 为 `system` 的系统插件承载（Maven 模块为 `pyin-plugin-system`），管理端接口统一经过插件网关：
 
 ```text
-GET    /api/core/plugins
-GET    /api/core/plugins/{pluginId}
-POST   /api/core/plugins/upload
-POST   /api/core/plugins/{pluginId}/install
-POST   /api/core/plugins/{pluginId}/start
-POST   /api/core/plugins/{pluginId}/stop
-POST   /api/core/plugins/{pluginId}/restart
-POST   /api/core/plugins/{pluginId}/upgrade
-DELETE /api/core/plugins/{pluginId}
-GET    /api/core/plugins/{pluginId}/logs
-GET    /api/core/plugins/manifest
+GET    /plugins/system/admin/users
+POST   /plugins/system/admin/users
+PUT    /plugins/system/admin/users/{id}
+DELETE /plugins/system/admin/users/{id}
+
+GET    /plugins/system/admin/roles
+POST   /plugins/system/admin/roles
+PUT    /plugins/system/admin/roles/{id}
+DELETE /plugins/system/admin/roles/{id}
+
+GET    /plugins/system/admin/permissions
+POST   /plugins/system/admin/roles/{id}/permissions
+
+GET    /plugins/system/admin/client-credentials
+POST   /plugins/system/admin/client-credentials
+POST   /plugins/system/admin/client-credentials/{id}/enable
+POST   /plugins/system/admin/client-credentials/{id}/disable
+POST   /plugins/system/admin/client-credentials/{id}/rotate-secret
+GET    /plugins/system/admin/client-credentials/{id}/request-logs
 ```
 
 ---
 
-## 15.3 插件管理端转发接口
+## 15.3 插件管理接口
 
 ```text
-ANY /api/plugins/{pluginId}/admin/**
+GET    /plugins/system/admin/plugins
+GET    /plugins/system/admin/plugins/{pluginId}
+POST   /plugins/system/admin/plugins/upload
+POST   /plugins/system/admin/plugins/{pluginId}/install
+POST   /plugins/system/admin/plugins/{pluginId}/stop
+POST   /plugins/system/admin/plugins/{pluginId}/restart
+POST   /plugins/system/admin/plugins/{pluginId}/upgrade
+DELETE /plugins/system/admin/plugins/{pluginId}
+GET    /plugins/system/admin/plugins/{pluginId}/logs
+GET    /plugins/system/admin/plugins/manifest
+GET    /plugins/system/admin/plugins/navigation
 ```
 
 ---
 
-## 15.4 C端 SDK 认证接口
+## 15.4 插件管理端转发接口
 
 ```text
-POST /capi/auth/token
-POST /capi/auth/refresh
+ANY /plugins/{pluginId}/admin/**
+```
+
+---
+
+## 15.5 C端 SDK 认证接口
+
+```text
+POST /open/auth/token
 ```
 
 Token 请求 Header：
@@ -2037,18 +2073,18 @@ X-Pyin-Signature
 
 ---
 
-## 15.5 C端 SDK 通知接口
+## 15.6 C端 SDK 通知接口
 
 ```text
-GET /capi/events/stream
+GET /open/events/stream
 ```
 
 ---
 
-## 15.6 C端 SDK 插件调用接口
+## 15.7 C端 SDK 插件调用接口
 
 ```text
-ANY /capi/plugins/{pluginId}/client/**
+ANY /plugins/{pluginId}/open/**
 ```
 
 ---
@@ -2070,8 +2106,6 @@ pyin_audit_log
 pyin_plugin
 pyin_plugin_version
 pyin_plugin_runtime_state
-pyin_plugin_menu
-pyin_plugin_route
 pyin_plugin_permission
 pyin_plugin_api
 pyin_plugin_event_log

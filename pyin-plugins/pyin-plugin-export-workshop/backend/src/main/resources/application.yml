@@ -1,0 +1,6 @@
+pyin:
+  center:
+    export-workshop:
+      storage-root: ${PYIN_EXPORT_WORKSHOP_STORAGE_ROOT:./pyin-distribution-parent/runtime/pyin-config-center-runtime/data/plugin-data/export-workshop}
+      max-file-size-bytes: ${PYIN_EXPORT_WORKSHOP_MAX_FILE_SIZE_BYTES:20971520}
+      local-roots: ${PYIN_EXPORT_WORKSHOP_LOCAL_ROOTS:}

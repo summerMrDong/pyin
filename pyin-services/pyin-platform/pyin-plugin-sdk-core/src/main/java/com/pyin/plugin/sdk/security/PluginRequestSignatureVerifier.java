@@ -16,7 +16,24 @@ public class PluginRequestSignatureVerifier {
     private final Duration allowedClockSkew = Duration.ofMinutes(5);
 
     public boolean verify(String pluginId, PluginAccessMode accessMode, HttpHeaders headers, String body) {
+        return verify(pluginId, accessMode, null, null, headers, body);
+    }
+
+    public boolean verify(
+            String pluginId,
+            PluginAccessMode accessMode,
+            String method,
+            String path,
+            HttpHeaders headers,
+            String body
+    ) {
         if (!pluginId.equals(headers.getFirst(PyinHeaders.PLUGIN_ID))) {
+            return false;
+        }
+        if (!isForwardTargetValid(method, headers.getFirst(PyinHeaders.FORWARD_METHOD))) {
+            return false;
+        }
+        if (!isForwardTargetValid(path, headers.getFirst(PyinHeaders.FORWARD_PATH))) {
             return false;
         }
         if (!isTimestampValid(headers.getFirst(PyinHeaders.TIMESTAMP))) {
@@ -28,6 +45,13 @@ public class PluginRequestSignatureVerifier {
         return isAccessModeAllowed(accessMode, headers.getFirst(PyinHeaders.REQUEST_SOURCE))
                 && StringUtils.hasText(headers.getFirst(PyinHeaders.NONCE))
                 && StringUtils.hasText(headers.getFirst(PyinHeaders.SIGNATURE));
+    }
+
+    private boolean isForwardTargetValid(String expected, String actual) {
+        if (!StringUtils.hasText(expected)) {
+            return true;
+        }
+        return expected.equals(actual);
     }
 
     private boolean isTimestampValid(String timestampValue) {

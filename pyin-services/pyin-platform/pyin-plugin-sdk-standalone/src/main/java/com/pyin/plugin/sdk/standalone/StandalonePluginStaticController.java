@@ -2,6 +2,7 @@ package com.pyin.plugin.sdk.standalone;
 
 import com.pyin.plugin.sdk.resource.PluginResourceProperties;
 import com.pyin.plugin.sdk.resource.PluginResourceResolver;
+import com.pyin.plugin.spi.PyinPlugin;
 import java.io.IOException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -17,19 +18,22 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/plugin-static/{pluginId}")
-@ConditionalOnBean(StandalonePluginProperties.class)
-@ConditionalOnProperty(prefix = "pyin.plugin", name = "plugin-id")
+@ConditionalOnBean({StandalonePluginProperties.class, PyinPlugin.class})
+@ConditionalOnProperty(prefix = "pyin.plugin", name = "center-url")
 public class StandalonePluginStaticController {
 
+    private final PyinPlugin pyinPlugin;
     private final StandalonePluginProperties standalonePluginProperties;
     private final PluginResourceResolver pluginResourceResolver;
     private final PluginResourceProperties pluginResourceProperties;
 
     public StandalonePluginStaticController(
+            PyinPlugin pyinPlugin,
             StandalonePluginProperties standalonePluginProperties,
             PluginResourceResolver pluginResourceResolver,
             PluginResourceProperties pluginResourceProperties
     ) {
+        this.pyinPlugin = pyinPlugin;
         this.standalonePluginProperties = standalonePluginProperties;
         this.pluginResourceResolver = pluginResourceResolver;
         this.pluginResourceProperties = pluginResourceProperties;
@@ -74,6 +78,6 @@ public class StandalonePluginStaticController {
 
     private boolean isExpectedPlugin(String pluginId) {
         return StringUtils.hasText(pluginId)
-                && pluginId.equals(standalonePluginProperties.getPluginId());
+                && pluginId.equals(pyinPlugin.manifest().getPluginId());
     }
 }

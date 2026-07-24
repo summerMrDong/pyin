@@ -1,8 +1,11 @@
 package com.pyin.gateway.forward;
 
-import com.pyin.gateway.signature.GatewaySignatureService;
+import com.pyin.center.auth.authentication.AuthenticatedPrincipal;
+import com.pyin.gateway.exception.PluginGatewayExceptionFactory;
 import com.pyin.gateway.path.PluginGatewayPathSupport;
-import com.pyin.plugin.runtime.registry.RegisteredPlugin;
+import com.pyin.gateway.path.PluginGatewayPathSupport.PluginGatewayPath;
+import com.pyin.gateway.signature.GatewaySignatureService;
+import com.pyin.plugin.runtime.route.PluginApiRoute;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -13,6 +16,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 @Service
@@ -29,30 +34,63 @@ public class StandalonePluginForwardService {
         this.restTemplate = restTemplate;
     }
 
-    public void forward(RegisteredPlugin plugin, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void forward(
+            PluginApiRoute route,
+            PluginGatewayPath path,
+            AuthenticatedPrincipal principal,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) throws IOException {
         byte[] body = request.getInputStream().readAllBytes();
-        String requestPath = PluginGatewayPathSupport.requestPath(request);
         HttpHeaders headers = extractHeaders(request);
+        String targetPath = PluginGatewayPathSupport.toPluginControllerPath(path);
         headers.setAll(gatewaySignatureService.buildForwardHeaders(
-                plugin.pluginId(),
-                PluginGatewayPathSupport.isAdminRequest(requestPath) ? "ADMIN_GATEWAY" : "CLIENT_SDK_GATEWAY",
+                route,
+                path,
+                principal,
+                request.getMethod(),
+                targetPath,
                 body
         ));
 
-        ResponseEntity<byte[]> forwardResponse = restTemplate.exchange(
-                buildTargetUrl(plugin.backendBaseUrl(), request),
-                HttpMethod.valueOf(request.getMethod()),
-                new HttpEntity<>(body, headers),
-                byte[].class
+        ResponseEntity<byte[]> forwardResponse = exchange(
+                route.pluginId(),
+                buildTargetUrl(route.pluginId(), route.backendBaseUrl(), targetPath, request),
+                request,
+                body,
+                headers
         );
         writeResponse(response, forwardResponse);
     }
 
-    private String buildTargetUrl(String baseUrl, HttpServletRequest request) {
+    private ResponseEntity<byte[]> exchange(
+            String pluginId,
+            String targetUrl,
+            HttpServletRequest request,
+            byte[] body,
+            HttpHeaders headers
+    ) {
+        try {
+            return restTemplate.exchange(
+                targetUrl,
+                HttpMethod.valueOf(request.getMethod()),
+                new HttpEntity<>(body, headers),
+                byte[].class
+            );
+        } catch (ResourceAccessException exception) {
+            throw PluginGatewayExceptionFactory.gatewayTimeout(pluginId, exception.getMessage());
+        } catch (RestClientException exception) {
+            throw PluginGatewayExceptionFactory.badGateway(pluginId, exception.getMessage());
+        }
+    }
+
+    private String buildTargetUrl(String pluginId, String baseUrl, String targetPath, HttpServletRequest request) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw PluginGatewayExceptionFactory.badGateway(pluginId, "独立插件后端地址为空");
+        }
         String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        String path = PluginGatewayPathSupport.requestPath(request);
         String queryString = request.getQueryString();
-        return normalizedBaseUrl + path + (queryString == null || queryString.isBlank() ? "" : "?" + queryString);
+        return normalizedBaseUrl + targetPath + (queryString == null || queryString.isBlank() ? "" : "?" + queryString);
     }
 
     private HttpHeaders extractHeaders(HttpServletRequest request) {
@@ -63,8 +101,6 @@ public class StandalonePluginForwardService {
             }
             headers.put(name, Collections.list(request.getHeaders(name)));
         });
-        headers.set("X-Pyin-User-Id", "system");
-        headers.set("X-Pyin-Username", "system");
         return headers;
     }
 

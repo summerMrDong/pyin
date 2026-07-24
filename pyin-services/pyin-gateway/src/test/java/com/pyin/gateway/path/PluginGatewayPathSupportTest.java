@@ -10,30 +10,41 @@ class PluginGatewayPathSupportTest {
 
     @Test
     void shouldDetectPluginGatewayRequest() {
-        assertTrue(PluginGatewayPathSupport.isPluginGatewayRequest("/dict/admin/list"));
-        assertTrue(PluginGatewayPathSupport.isPluginGatewayRequest("/dict/open/query"));
+        assertTrue(PluginGatewayPathSupport.isPluginGatewayRequest("/plugins/dict/admin/list"));
+        assertTrue(PluginGatewayPathSupport.isPluginGatewayRequest("/plugins/dict/open/query"));
+        assertFalse(PluginGatewayPathSupport.isPluginGatewayRequest("/dict/admin/list"));
+        assertFalse(PluginGatewayPathSupport.isPluginGatewayRequest("/api/plugins/dict/admin/list"));
+        assertFalse(PluginGatewayPathSupport.isPluginGatewayRequest("/legacy/dict/client/query"));
         assertFalse(PluginGatewayPathSupport.isPluginGatewayRequest("/plugin-static/dict/remoteEntry.js"));
     }
 
     @Test
     void shouldExtractPluginIdAndAdminFlag() {
-        assertEquals("dict", PluginGatewayPathSupport.extractPluginId("/dict/admin/list"));
-        assertTrue(PluginGatewayPathSupport.isAdminRequest("/dict/admin/list"));
-        assertFalse(PluginGatewayPathSupport.isAdminRequest("/dict/open/query"));
+        assertEquals("dict", PluginGatewayPathSupport.extractPluginId("/plugins/dict/admin/list"));
+        assertTrue(PluginGatewayPathSupport.isAdminRequest("/plugins/dict/admin/list"));
+        assertFalse(PluginGatewayPathSupport.isAdminRequest("/plugins/dict/open/query"));
     }
 
     @Test
     void shouldExtractAdminRelativePath() {
-        assertEquals("/list", PluginGatewayPathSupport.extractPluginRelativePath("/dict/admin/list", "dict"));
+        assertEquals("/list", PluginGatewayPathSupport.extractPluginRelativePath("/plugins/dict/admin/list", "dict"));
     }
 
     @Test
     void shouldExtractOpenRelativePath() {
-        assertEquals("/query", PluginGatewayPathSupport.extractPluginRelativePath("/dict/open/query", "dict"));
+        assertEquals("/query", PluginGatewayPathSupport.extractPluginRelativePath("/plugins/dict/open/query", "dict"));
     }
 
     @Test
     void shouldReturnRootForGatewayRoot() {
-        assertEquals("/", PluginGatewayPathSupport.extractPluginRelativePath("/dict/open", "dict"));
+        assertEquals("/", PluginGatewayPathSupport.extractPluginRelativePath("/plugins/dict/open", "dict"));
+    }
+
+    @Test
+    void shouldBuildPluginControllerPath() {
+        assertEquals(
+                "/plugins/dict/admin/list",
+                PluginGatewayPathSupport.toPluginControllerPath(PluginGatewayPathSupport.parse("/plugins/dict/admin/list"))
+        );
     }
 }

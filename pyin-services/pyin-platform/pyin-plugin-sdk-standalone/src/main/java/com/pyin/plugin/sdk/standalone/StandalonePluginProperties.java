@@ -1,5 +1,8 @@
 package com.pyin.plugin.sdk.standalone;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -8,10 +11,11 @@ import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
 @ConfigurationProperties(prefix = "pyin.plugin")
+@Getter
+@Setter
 public class StandalonePluginProperties implements EnvironmentAware {
 
     private String centerUrl;
-    private String pluginId;
     private String nodeId;
     private String advertiseBaseUrl;
     private Long heartbeatIntervalMs = 15000L;
@@ -36,70 +40,6 @@ public class StandalonePluginProperties implements EnvironmentAware {
 
     private Environment environment;
 
-    public String getCenterUrl() {
-        return centerUrl;
-    }
-
-    public void setCenterUrl(String centerUrl) {
-        this.centerUrl = centerUrl;
-    }
-
-    public String getPluginId() {
-        return pluginId;
-    }
-
-    public void setPluginId(String pluginId) {
-        this.pluginId = pluginId;
-    }
-
-    public String getAdvertiseBaseUrl() {
-        return advertiseBaseUrl;
-    }
-
-    public void setAdvertiseBaseUrl(String advertiseBaseUrl) {
-        this.advertiseBaseUrl = advertiseBaseUrl;
-    }
-
-    public String getNodeId() {
-        return nodeId;
-    }
-
-    public void setNodeId(String nodeId) {
-        this.nodeId = nodeId;
-    }
-
-    public Long getHeartbeatIntervalMs() {
-        return heartbeatIntervalMs;
-    }
-
-    public void setHeartbeatIntervalMs(Long heartbeatIntervalMs) {
-        this.heartbeatIntervalMs = heartbeatIntervalMs;
-    }
-
-    public String getBackendBaseUrl() {
-        return backendBaseUrl;
-    }
-
-    public void setBackendBaseUrl(String backendBaseUrl) {
-        this.backendBaseUrl = backendBaseUrl;
-    }
-
-    public String getFrontendBaseUrl() {
-        return frontendBaseUrl;
-    }
-
-    public void setFrontendBaseUrl(String frontendBaseUrl) {
-        this.frontendBaseUrl = frontendBaseUrl;
-    }
-
-    public String getHealthUrl() {
-        return healthUrl;
-    }
-
-    public void setHealthUrl(String healthUrl) {
-        this.healthUrl = healthUrl;
-    }
-
     public String getResolvedBackendBaseUrl() {
         if (StringUtils.hasText(backendBaseUrl)) {
             return backendBaseUrl;
@@ -107,7 +47,7 @@ public class StandalonePluginProperties implements EnvironmentAware {
         return normalizeBaseUrl(resolveAdvertiseBaseUrl());
     }
 
-    public String getResolvedFrontendBaseUrl() {
+    public String getResolvedFrontendBaseUrl(String pluginId) {
         if (StringUtils.hasText(frontendBaseUrl)) {
             return normalizeBaseUrl(frontendBaseUrl);
         }
@@ -121,16 +61,11 @@ public class StandalonePluginProperties implements EnvironmentAware {
         return getResolvedBackendBaseUrl() + "/health";
     }
 
-    public String getResolvedNodeId() {
+    public String getResolvedNodeId(String pluginId) {
         if (StringUtils.hasText(nodeId)) {
             return nodeId;
         }
-        return getPluginId() + "@" + resolveAdvertiseBaseUrl();
-    }
-
-    @Override
-    public void setEnvironment(Environment environment) {
-        this.environment = environment;
+        return pluginId + "@" + resolveAdvertiseBaseUrl();
     }
 
     private String resolveAdvertiseBaseUrl() {

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * 配置客户端控制器，对外提供 C 端 API。
  */
-@OpenMapping
+@OpenMapping("/config")
 public class ConfigClientController {
 
     @GetMapping("/value")

@@ -1,5 +1,8 @@
 package com.pyin.plugin.client.core.starter.autoconfigure;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import com.pyin.plugin.client.api.http.PyinCenterHttpClient;
 import com.pyin.plugin.client.core.auth.TokenManager;
 import com.pyin.plugin.client.core.config.PyinClientProperties;
@@ -66,76 +69,28 @@ public class PyinClientCoreAutoConfiguration {
     }
 
     @ConfigurationProperties(prefix = "pyin.center")
+    @Getter
+    @Setter
     public static class PyinPropertiesBinding {
         private boolean enabled = true;
         private String serverUrl;
         private final Auth auth = new Auth();
         private final Config config = new Config();
 
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public String getServerUrl() {
-            return serverUrl;
-        }
-
-        public void setServerUrl(String serverUrl) {
-            this.serverUrl = serverUrl;
-        }
-
-        public Auth getAuth() {
-            return auth;
-        }
-
-        public Config getConfig() {
-            return config;
-        }
-
+        @Getter
+        @Setter
         public static class Auth {
             private String accessKey;
             private String accessSecret;
 
-            public String getAccessKey() {
-                return accessKey;
-            }
-
-            public void setAccessKey(String accessKey) {
-                this.accessKey = accessKey;
-            }
-
-            public String getAccessSecret() {
-                return accessSecret;
-            }
-
-            public void setAccessSecret(String accessSecret) {
-                this.accessSecret = accessSecret;
-            }
         }
 
+        @Getter
+        @Setter
         public static class Config {
             private String namespace;
             private String env;
 
-            public String getNamespace() {
-                return namespace;
-            }
-
-            public void setNamespace(String namespace) {
-                this.namespace = namespace;
-            }
-
-            public String getEnv() {
-                return env;
-            }
-
-            public void setEnv(String env) {
-                this.env = env;
-            }
         }
     }
 }

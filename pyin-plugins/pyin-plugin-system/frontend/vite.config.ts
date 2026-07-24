@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     vue(),
     federation({
-      name: 'pyinSystem',
+      name: 'system',
       filename: 'remoteEntry.js',
       exposes: {
         './PyinSystemRemoteApp': './src/exposed/PyinSystemRemoteApp.vue',
@@ -20,6 +20,12 @@ export default defineConfig({
   },
   server: {
     port: 4173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:8080',
+      '/open': 'http://127.0.0.1:8080',
+      '/plugins': 'http://127.0.0.1:8080',
+      '/plugin-static': 'http://127.0.0.1:8080'
+    }
   }
 })

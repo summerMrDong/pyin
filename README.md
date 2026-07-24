@@ -72,7 +72,23 @@ npm run build
 
 系统插件后端在 Maven 编译时会自动执行对应 `frontend/` 的 `npm ci` 与 `npm run build`，并将构建结果复制到各自后端的 `src/main/resources/plugin-static/<pluginId>/` 目录中。
 
-当前插件开发模型采用 Java-only `PluginManifest`，插件通过 `PyinPlugin.manifest()` 声明基础信息；插件菜单必须由 `PyinPlugin.menus()` 显式提供；接口与权限默认由 `@AdminApi` / `@ClientSdkApi` 自动扫描生成；页面路由仅由前端联邦暴露的 `src/exposed/routes.ts` 提供，不再要求手写 `plugin.yml`。
+### 单插件 Maven 构建
+
+插件后端依赖当前仓库中的 SPI 与 SDK 快照。构建单个插件时，必须从仓库根目录通过 Maven 反应堆同时构建这些依赖，避免使用本地仓库中过期的快照 JAR：
+
+```bash
+mvn -pl pyin-plugins/pyin-plugin-dict/backend -am -DskipTests package
+```
+
+仅验证 Java 编译、且前端产物已存在时，可跳过前端构建：
+
+```bash
+mvn -pl pyin-plugins/pyin-plugin-dict/backend -am -DskipTests -Dexec.skip=true clean compile
+```
+
+不要直接在 `pyin-plugins/pyin-plugin-dict/` 目录执行 Maven 编译来获取最新 SPI/SDK；若确实需要这样做，应先在仓库根目录执行 `mvn clean install -DskipTests` 安装当前快照依赖。
+
+当前插件开发模型采用 Java-only `PluginManifest`，插件通过 `PyinPlugin.manifest()` 声明基础信息；平台不再提供 `menus()` 或插件菜单树。主前端壳点击插件后固定跳转 `/plugins/{pluginId}`，并动态加载前端联邦暴露的 `src/exposed/routes.ts`；接口与权限默认由 `@AdminApi` / `@ClientSdkApi` 自动扫描生成，不再要求手写 `plugin.yml`。完整规则见 [插件工作区路由规范](docs/plugin-workspace-routing.md)。
 
 当前默认系统插件的模块联邦产物会把 `remoteEntry.js` 放在 `plugin-static/<pluginId>/assets/` 下；网关继续对外暴露 `/plugin-static/{pluginId}/remoteEntry.js`，并兼容该入口衍生出的根级相对 `js/css` 资源请求，将其回退到 `assets/` 目录解析。
 

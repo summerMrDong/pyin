@@ -10,4 +10,12 @@
     </parent>
     <artifactId>pyin-plugin-spi</artifactId>
     <name>pyin-plugin-spi</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

@@ -46,7 +46,7 @@ public class PluginResourceAssembler {
                     null,
                     null,
                     false,
-                    Map.of("remoteName", manifest.getRemoteName(), "exposedModules", manifest.getExposedModules())
+                    Map.of()
             ));
         }
 

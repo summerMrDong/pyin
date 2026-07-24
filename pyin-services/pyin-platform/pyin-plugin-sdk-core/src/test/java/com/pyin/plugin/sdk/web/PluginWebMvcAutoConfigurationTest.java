@@ -11,6 +11,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 
 class PluginWebMvcAutoConfigurationTest {
@@ -28,7 +29,7 @@ class PluginWebMvcAutoConfigurationTest {
                 DemoAdminController.class
         );
         assertThat(adminMapping).isNotNull();
-        assertThat(adminMapping.getPatternValues()).containsExactly("/demo/admin/ping");
+        assertThat(adminMapping.getPatternValues()).containsExactly("/plugins/demo/admin/ping");
 
         Method openMethod = DemoOpenController.class.getDeclaredMethod("pong");
         RequestMappingInfo openMapping = ReflectionTestUtils.invokeMethod(
@@ -38,25 +39,33 @@ class PluginWebMvcAutoConfigurationTest {
                 DemoOpenController.class
         );
         assertThat(openMapping).isNotNull();
-        assertThat(openMapping.getPatternValues()).containsExactly("/demo/open/pong");
+        assertThat(openMapping.getPatternValues()).containsExactly("/plugins/demo/open/pong");
+    }
+
+    @Test
+    void shouldLeaveControllerWithoutPluginMappingAnnotationUnchanged() throws NoSuchMethodException {
+        PluginOwnershipResolver ownershipResolver = new PluginOwnershipResolver(List.of(new DemoPlugin()));
+        PluginRequestMappingHandlerMapping mapping = new PluginRequestMappingHandlerMapping(ownershipResolver);
+
+        Method method = PlainController.class.getDeclaredMethod("health");
+        RequestMappingInfo requestMapping = ReflectionTestUtils.invokeMethod(
+                mapping,
+                "getMappingForMethod",
+                method,
+                PlainController.class
+        );
+
+        assertThat(requestMapping).isNotNull();
+        assertThat(requestMapping.getPatternValues()).containsExactly("/plain/health");
     }
 
     static class DemoPlugin implements PyinPlugin {
 
         @Override
-        public String pluginId() {
-            return "demo";
-        }
-
-        @Override
         public PluginManifest manifest() {
-            return PluginManifest.builder().pluginId("demo").pluginName("demo").build();
+            return PluginManifest.builder("demo").pluginName("demo").build();
         }
 
-        @Override
-        public List<com.pyin.plugin.spi.model.PluginMenu> menus() {
-            return List.of();
-        }
     }
 
     @AdminMapping
@@ -74,6 +83,15 @@ class PluginWebMvcAutoConfigurationTest {
         @GetMapping("/pong")
         public String pong() {
             return "open";
+        }
+    }
+
+    @RequestMapping("/plain")
+    static class PlainController {
+
+        @GetMapping("/health")
+        public String health() {
+            return "ok";
         }
     }
 }

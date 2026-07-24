@@ -1,6 +1,8 @@
 import { httpRequest } from './http'
 import { unwrapResult } from './result'
 
+const SYSTEM_ADMIN_API = '/plugins/system/admin'
+
 function buildQuery(params = {}) {
   const search = new URLSearchParams()
 
@@ -15,17 +17,17 @@ function buildQuery(params = {}) {
 }
 
 export async function fetchUsers(params = {}) {
-  const result = await httpRequest(`/api/users${buildQuery(params)}`)
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/users${buildQuery(params)}`)
   return unwrapResult(result, '加载用户列表失败')
 }
 
 export async function fetchUserDetail(id) {
-  const result = await httpRequest(`/api/users/${id}`)
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/users/${id}`)
   return unwrapResult(result, '加载用户详情失败')
 }
 
 export async function createUser(payload) {
-  const result = await httpRequest('/api/users', {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/users`, {
     method: 'POST',
     body: payload
   })
@@ -33,7 +35,7 @@ export async function createUser(payload) {
 }
 
 export async function updateUser(id, payload) {
-  const result = await httpRequest(`/api/users/${id}`, {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/users/${id}`, {
     method: 'PUT',
     body: payload
   })
@@ -41,7 +43,7 @@ export async function updateUser(id, payload) {
 }
 
 export async function resetUserPassword(id, payload) {
-  const result = await httpRequest(`/api/users/${id}/reset-password`, {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/users/${id}/reset-password`, {
     method: 'POST',
     body: payload
   })
@@ -49,7 +51,7 @@ export async function resetUserPassword(id, payload) {
 }
 
 export async function deleteUser(id) {
-  const result = await httpRequest(`/api/users/${id}`, {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/users/${id}`, {
     method: 'DELETE'
   })
   return unwrapResult(result, '删除用户失败')

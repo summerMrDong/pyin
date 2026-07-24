@@ -1,23 +1,9 @@
 import FileRemoteApp from './FileRemoteApp.vue'
 
-export const routeDefinitions = [
+export default [
   {
-    code: 'file',
     path: '/plugins/file',
-    component: 'FileRemoteApp',
-    title: '文件管理',
-    icon: 'FolderOpen',
-    sort: 160,
-    requireLogin: true,
-    permissionCode: 'file:view'
+    name: 'plugin-file',
+    component: FileRemoteApp
   }
 ]
-
-const componentRegistry = {
-  FileRemoteApp
-}
-
-export default routeDefinitions.map((route) => ({
-  path: route.path,
-  component: componentRegistry[route.component]
-}))

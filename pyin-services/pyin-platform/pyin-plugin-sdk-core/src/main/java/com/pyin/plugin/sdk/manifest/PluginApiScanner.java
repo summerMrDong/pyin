@@ -6,6 +6,7 @@ import com.pyin.plugin.sdk.annotation.Permission;
 import com.pyin.plugin.spi.PyinPlugin;
 import com.pyin.plugin.spi.model.PluginAccessMode;
 import com.pyin.plugin.spi.model.PluginApiDefinition;
+import com.pyin.plugin.spi.model.PluginManifest;
 import com.pyin.plugin.spi.model.PluginPermission;
 import com.pyin.plugin.spi.model.PluginPermissionResourceType;
 import java.lang.reflect.Method;
@@ -35,9 +36,9 @@ import org.springframework.web.bind.annotation.RequestMethod;
 @Component
 public class PluginApiScanner {
 
-    public PluginScanResult scan(ApplicationContext applicationContext, PyinPlugin plugin) {
+    public PluginScanResult scan(ApplicationContext applicationContext, PyinPlugin plugin, PluginManifest manifest) {
         String packagePrefix = ClassUtils.getPackageName(AopUtils.getTargetClass(plugin));
-        String pluginId = plugin.pluginId();
+        String pluginId = manifest.getPluginId();
         List<PluginApiDefinition> apis = new ArrayList<>();
         Map<String, PluginPermission> permissionMap = new LinkedHashMap<>();
         Map<String, String> apiKeys = new LinkedHashMap<>();
@@ -91,13 +92,13 @@ public class PluginApiScanner {
                     throw new IllegalStateException("插件接口必须声明唯一 HTTP 方法: " + method);
                 }
 
-                String publicPath = normalizePath("/" + pluginId + internalPrefix, relativePath);
-                String internalPath = publicPath;
-                String gatewayPath = normalizeGatewayApiPath(publicPath, pluginId);
+                String permissionPath = normalizePath("/" + pluginId + internalPrefix, relativePath);
+                String internalPath = normalizePath("/plugins/" + pluginId + internalPrefix, relativePath);
+                String gatewayPath = normalizeGatewayApiPath(internalPath, pluginId);
                 registerApi(apiKeys, accessMode, httpMethod, gatewayPath);
 
                 Permission permission = AnnotatedElementUtils.findMergedAnnotation(method, Permission.class);
-                String permissionCode = resolvePermissionCode(permission, publicPath, httpMethod);
+                String permissionCode = resolvePermissionCode(permission, permissionPath, httpMethod);
                 boolean auditEnabled = permission == null || permission.auditEnabled();
 
                 apis.add(new PluginApiDefinition(
@@ -141,7 +142,7 @@ public class PluginApiScanner {
 
     static String normalizeGatewayApiPath(String publicPath, String pluginId) {
         String normalized = normalizePath("", publicPath);
-        String pluginPrefix = "/" + pluginId;
+        String pluginPrefix = "/plugins/" + pluginId;
         if (!normalized.startsWith(pluginPrefix)) {
             return normalized;
         }

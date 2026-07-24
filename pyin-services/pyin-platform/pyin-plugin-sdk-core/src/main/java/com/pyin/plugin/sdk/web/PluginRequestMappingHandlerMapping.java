@@ -2,6 +2,7 @@ package com.pyin.plugin.sdk.web;
 
 import com.pyin.plugin.sdk.annotation.AdminMapping;
 import com.pyin.plugin.sdk.annotation.OpenMapping;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
@@ -26,17 +27,17 @@ class PluginRequestMappingHandlerMapping extends RequestMappingHandlerMapping {
             return mapping;
         }
         String pluginId = pluginOwnershipResolver.resolvePluginId(handlerType);
-        RequestMappingInfo prefix = RequestMappingInfo.paths("/" + pluginId + fixedSegment)
+        RequestMappingInfo prefix = RequestMappingInfo.paths("/plugins/" + pluginId + fixedSegment)
                 .options(getBuilderConfiguration())
                 .build();
         return prefix.combine(mapping);
     }
 
     private String fixedSegment(Class<?> handlerType) {
-        if (handlerType.isAnnotationPresent(AdminMapping.class)) {
+        if (AnnotatedElementUtils.hasAnnotation(handlerType, AdminMapping.class)) {
             return "/admin";
         }
-        if (handlerType.isAnnotationPresent(OpenMapping.class)) {
+        if (AnnotatedElementUtils.hasAnnotation(handlerType, OpenMapping.class)) {
             return "/open";
         }
         return null;

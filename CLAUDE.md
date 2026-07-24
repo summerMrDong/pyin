@@ -38,7 +38,7 @@ cd pyin-plugins/pyin-plugin-dict/frontend && npm install && npm run build
 mvn test -pl pyin-services/pyin-bootstrap
 ```
 
-开发服务器启动端口为 **8080**，使用 H2 数据库。前端壳的 Vite 开发服务器将 `/api`、`/capi`、`/plugin-static` 代理到 `http://127.0.0.1:8080`。
+开发服务器启动端口为 **8080**，使用 H2 数据库。前端壳的 Vite 开发服务器将 `/api`、`/open`、`/plugins`、`/plugin-static` 代理到 `http://127.0.0.1:8080`。
 
 ## 架构
 
@@ -55,8 +55,8 @@ mvn test -pl pyin-services/pyin-bootstrap
 │   ├── pyin-plugin-sdk-embedded — 内嵌插件支持
 │   └── pyin-plugin-sdk-standalone — 独立插件支持
 ├── pyin-plugin-runtime   — 插件生命周期：扫描、加载、安装、启动、停止、卸载
-├── pyin-plugin-gateway   — 请求转发（管理端: /api/plugins/{pluginId}/admin/**，C端SDK: /capi/plugins/{pluginId}/client/**）
-└── pyin-notify           — 事件总线、SSE/WebSocket 推送 (/capi/events/stream)
+├── pyin-plugin-gateway   — 请求转发（管理端: /plugins/{pluginId}/admin/**，C端SDK: /plugins/{pluginId}/open/**）
+└── pyin-notify           — 事件总线、SSE/WebSocket 推送 (/open/events/stream)
 
 客户端 SDK (pyin-clients/)
 ├── pyin-client-core/     — 认证(accessKey/accessSecret)、Token、HTTP客户端、事件通道、功能注册表
@@ -75,8 +75,8 @@ mvn test -pl pyin-services/pyin-bootstrap
 
 ### 请求流程
 
-- **管理端请求：** 浏览器 → pyin-web-shell → `/api/plugins/{pluginId}/admin/**` → pyin-plugin-gateway → 插件后端
-- **C端 SDK 请求：** 外部应用 → pyin-client-core-sdk → `/capi/plugins/{pluginId}/client/**` → pyin-plugin-gateway → 插件后端
+- **管理端请求：** 浏览器 → pyin-web-shell → `/plugins/{pluginId}/admin/**` → pyin-plugin-gateway → 插件后端
+- **C端 SDK 请求：** 外部应用 → pyin-client-core-sdk → `/plugins/{pluginId}/open/**` → pyin-plugin-gateway → 插件后端
 - **事件通知：** 插件发布事件 → pyin-notify → SSE/WebSocket → pyin-client-core-sdk → 通过 JVM 内部 Java 方法调用分发给已注册的功能 SDK（非 HTTP）
 
 ## 核心约束

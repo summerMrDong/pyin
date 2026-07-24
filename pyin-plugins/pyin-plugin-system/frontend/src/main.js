@@ -1,6 +1,12 @@
-import { createApp } from 'vue'
+import { createApp, h } from 'vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
-import PyinSystemRemoteApp from './exposed/PyinSystemRemoteApp.vue'
+import { createRouter, createWebHistory, RouterView } from 'vue-router'
+import routes from './exposed/routes'
 
-createApp(PyinSystemRemoteApp).use(ElementPlus).mount('#app')
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+createApp({ render: () => h(RouterView) }).use(router).use(ElementPlus).mount('#app')

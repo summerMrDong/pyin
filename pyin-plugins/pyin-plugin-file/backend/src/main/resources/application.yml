@@ -13,7 +13,6 @@ spring:
 pyin:
   plugin:
     center-url: ${PYIN_CENTER_URL:http://127.0.0.1:8080}
-    plugin-id: file
     advertise-base-url: ${PYIN_FILE_ADVERTISE_BASE_URL:http://127.0.0.1:19110}
     heartbeat-interval-ms: 15000
     resources:

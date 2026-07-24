@@ -33,26 +33,12 @@ public class PluginManifest {
     private String pluginId;
     /** 插件显示名称。 */
     private String pluginName;
-    /** 插件类型，例如系统插件或外部插件。 */
-    private PluginType pluginType = PluginType.EXTERNAL;
-    /** 插件运行模式，例如内嵌运行或独立进程运行。 */
-    private PluginRuntimeMode runtimeMode = PluginRuntimeMode.EMBEDDED;
     /** 插件版本号。 */
     private String pluginVersion;
     /** 插件前端基础访问路径，例如 `/plugins/config`。 */
     private String basePath;
     /** 插件前端模块联邦入口地址。 */
     private String entryJs;
-    /** 模块联邦远端名称。 */
-    private String remoteName;
-    /** 模块联邦暴露的应用模块名列表，支持多个模块。 */
-    private List<String> exposedModules = new ArrayList<>();
-    /** 独立插件后端服务基础地址。 */
-    private String backendBaseUrl;
-    /** 独立插件前端服务基础地址。 */
-    private String frontendBaseUrl;
-    /** 独立插件健康检查地址。 */
-    private String healthUrl;
     /** 插件权限定义，默认由后端注解扫描自动装配，也可手动覆盖。 */
     private List<PluginPermission> permissions = new ArrayList<>();
     /** 插件接口定义，默认由后端注解扫描自动装配，也可手动覆盖。 */
@@ -60,8 +46,16 @@ public class PluginManifest {
     /** 插件资源定义，默认由装配器自动生成，也可手动覆盖。 */
     private List<PluginResourceDefinition> resources = new ArrayList<>();
 
-    public static Builder builder() {
-        return new Builder();
+    /**
+     * 创建插件清单构建器。
+     *
+     * <p>插件 ID 是清单的唯一身份来源，因此必须在构建器创建时提供；插件入口不再重复声明 ID。</p>
+     *
+     * @param pluginId 非空插件唯一标识
+     * @return 已写入插件 ID 的清单构建器
+     */
+    public static Builder builder(String pluginId) {
+        return new Builder(pluginId);
     }
 
     public String getPluginId() {
@@ -78,22 +72,6 @@ public class PluginManifest {
 
     public void setPluginName(String pluginName) {
         this.pluginName = pluginName;
-    }
-
-    public PluginType getPluginType() {
-        return pluginType;
-    }
-
-    public void setPluginType(PluginType pluginType) {
-        this.pluginType = pluginType;
-    }
-
-    public PluginRuntimeMode getRuntimeMode() {
-        return runtimeMode;
-    }
-
-    public void setRuntimeMode(PluginRuntimeMode runtimeMode) {
-        this.runtimeMode = runtimeMode;
     }
 
     public String getPluginVersion() {
@@ -118,46 +96,6 @@ public class PluginManifest {
 
     public void setEntryJs(String entryJs) {
         this.entryJs = entryJs;
-    }
-
-    public String getRemoteName() {
-        return remoteName;
-    }
-
-    public void setRemoteName(String remoteName) {
-        this.remoteName = remoteName;
-    }
-
-    public List<String> getExposedModules() {
-        return exposedModules;
-    }
-
-    public void setExposedModules(List<String> exposedModules) {
-        this.exposedModules = exposedModules;
-    }
-
-    public String getBackendBaseUrl() {
-        return backendBaseUrl;
-    }
-
-    public void setBackendBaseUrl(String backendBaseUrl) {
-        this.backendBaseUrl = backendBaseUrl;
-    }
-
-    public String getFrontendBaseUrl() {
-        return frontendBaseUrl;
-    }
-
-    public void setFrontendBaseUrl(String frontendBaseUrl) {
-        this.frontendBaseUrl = frontendBaseUrl;
-    }
-
-    public String getHealthUrl() {
-        return healthUrl;
-    }
-
-    public void setHealthUrl(String healthUrl) {
-        this.healthUrl = healthUrl;
     }
 
     public List<PluginPermission> getPermissions() {
@@ -192,23 +130,12 @@ public class PluginManifest {
     public static class Builder {
         private final PluginManifest manifest = new PluginManifest();
 
-        public Builder pluginId(String pluginId) {
+        private Builder(String pluginId) {
             manifest.setPluginId(pluginId);
-            return this;
         }
 
         public Builder pluginName(String pluginName) {
             manifest.setPluginName(pluginName);
-            return this;
-        }
-
-        public Builder pluginType(PluginType pluginType) {
-            manifest.setPluginType(pluginType);
-            return this;
-        }
-
-        public Builder runtimeMode(PluginRuntimeMode runtimeMode) {
-            manifest.setRuntimeMode(runtimeMode);
             return this;
         }
 
@@ -224,36 +151,6 @@ public class PluginManifest {
 
         public Builder entryJs(String entryJs) {
             manifest.setEntryJs(entryJs);
-            return this;
-        }
-
-        public Builder remoteName(String remoteName) {
-            manifest.setRemoteName(remoteName);
-            return this;
-        }
-
-        public Builder exposedModule(String exposedModule) {
-            manifest.getExposedModules().add(exposedModule);
-            return this;
-        }
-
-        public Builder exposedModules(List<String> exposedModules) {
-            manifest.setExposedModules(new ArrayList<>(exposedModules));
-            return this;
-        }
-
-        public Builder backendBaseUrl(String backendBaseUrl) {
-            manifest.setBackendBaseUrl(backendBaseUrl);
-            return this;
-        }
-
-        public Builder frontendBaseUrl(String frontendBaseUrl) {
-            manifest.setFrontendBaseUrl(frontendBaseUrl);
-            return this;
-        }
-
-        public Builder healthUrl(String healthUrl) {
-            manifest.setHealthUrl(healthUrl);
             return this;
         }
 

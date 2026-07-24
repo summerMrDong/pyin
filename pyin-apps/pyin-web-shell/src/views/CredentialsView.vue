@@ -115,7 +115,6 @@
           </el-select>
           <el-select v-model="logFilters.requestType" placeholder="请求类型" clearable>
             <el-option label="认证申请" value="AUTH_TOKEN" />
-            <el-option label="令牌刷新" value="AUTH_REFRESH" />
             <el-option label="插件调用" value="PLUGIN_CLIENT_API" />
           </el-select>
           <el-input v-model="logFilters.keyword" placeholder="按 URI 搜索" clearable @keyup.enter="loadLogs" />

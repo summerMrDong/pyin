@@ -2,7 +2,7 @@ package com.pyin.plugin.bootstrap;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pyin.plugin.system.system.CoreSchemaInitializer;
+import com.pyin.plugin.system.setting.support.CoreSchemaInitializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -41,7 +41,7 @@ class UserRoleManagementTest {
     void shouldCreateRoleAndUserThenResetPassword() throws Exception {
         String token = adminToken();
 
-        MvcResult roleResult = mockMvc.perform(post("/api/roles")
+        MvcResult roleResult = mockMvc.perform(post("/plugins/system/admin/roles")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -59,7 +59,7 @@ class UserRoleManagementTest {
         assertThat(roleJson.path("success").asBoolean()).isTrue();
         long roleId = roleJson.path("data").path("id").asLong();
 
-        MvcResult userResult = mockMvc.perform(post("/api/users")
+        MvcResult userResult = mockMvc.perform(post("/plugins/system/admin/users")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -79,7 +79,7 @@ class UserRoleManagementTest {
         long userId = userJson.path("data").path("id").asLong();
         assertThat(userJson.path("data").path("roles")).hasSize(1);
 
-        MvcResult listResult = mockMvc.perform(get("/api/users")
+        MvcResult listResult = mockMvc.perform(get("/plugins/system/admin/users")
                         .header(AUTHORIZATION, token)
                         .param("username", "ops.lead"))
                 .andExpect(status().isOk())
@@ -89,7 +89,7 @@ class UserRoleManagementTest {
         assertThat(listJson.path("data")).hasSize(1);
         assertThat(listJson.path("data").get(0).path("status").asText()).isEqualTo("ENABLED");
 
-        mockMvc.perform(post("/api/users/{id}/reset-password", userId)
+        mockMvc.perform(post("/plugins/system/admin/users/{id}/reset-password", userId)
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -112,7 +112,7 @@ class UserRoleManagementTest {
     void shouldProtectDefaultAdminAndBoundRoles() throws Exception {
         String token = adminToken();
 
-        MvcResult roleResult = mockMvc.perform(post("/api/roles")
+        MvcResult roleResult = mockMvc.perform(post("/plugins/system/admin/roles")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -127,7 +127,7 @@ class UserRoleManagementTest {
                 .andReturn();
         long roleId = json(roleResult).path("data").path("id").asLong();
 
-        MvcResult userResult = mockMvc.perform(post("/api/users")
+        MvcResult userResult = mockMvc.perform(post("/plugins/system/admin/users")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -143,19 +143,19 @@ class UserRoleManagementTest {
                 .andReturn();
         long userId = json(userResult).path("data").path("id").asLong();
 
-        MvcResult deleteAdminResult = mockMvc.perform(delete("/api/users/1")
+        MvcResult deleteAdminResult = mockMvc.perform(delete("/plugins/system/admin/users/1")
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(json(deleteAdminResult).path("success").asBoolean()).isFalse();
 
-        MvcResult deleteRoleResult = mockMvc.perform(delete("/api/roles/{id}", roleId)
+        MvcResult deleteRoleResult = mockMvc.perform(delete("/plugins/system/admin/roles/{id}", roleId)
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(json(deleteRoleResult).path("success").asBoolean()).isFalse();
 
-        mockMvc.perform(put("/api/users/{id}", userId)
+        mockMvc.perform(put("/plugins/system/admin/users/{id}", userId)
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -167,7 +167,7 @@ class UserRoleManagementTest {
                                 """))
                 .andExpect(status().isOk());
 
-        MvcResult deleteRoleAfterUnbind = mockMvc.perform(delete("/api/roles/{id}", roleId)
+        MvcResult deleteRoleAfterUnbind = mockMvc.perform(delete("/plugins/system/admin/roles/{id}", roleId)
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -178,7 +178,7 @@ class UserRoleManagementTest {
     void shouldSupportRoleSortPermissionsResourcesAndUsers() throws Exception {
         String token = adminToken();
 
-        MvcResult firstRoleResult = mockMvc.perform(post("/api/roles")
+        MvcResult firstRoleResult = mockMvc.perform(post("/plugins/system/admin/roles")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -194,7 +194,7 @@ class UserRoleManagementTest {
                 .andReturn();
         long firstRoleId = json(firstRoleResult).path("data").path("id").asLong();
 
-        MvcResult secondRoleResult = mockMvc.perform(post("/api/roles")
+        MvcResult secondRoleResult = mockMvc.perform(post("/plugins/system/admin/roles")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -210,7 +210,7 @@ class UserRoleManagementTest {
                 .andReturn();
         long secondRoleId = json(secondRoleResult).path("data").path("id").asLong();
 
-        MvcResult sortedListResult = mockMvc.perform(get("/api/roles")
+        MvcResult sortedListResult = mockMvc.perform(get("/plugins/system/admin/roles")
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -221,7 +221,7 @@ class UserRoleManagementTest {
         assertThat(alphaIndex).isGreaterThanOrEqualTo(0);
         assertThat(betaIndex).isLessThan(alphaIndex);
 
-        mockMvc.perform(put("/api/roles/{id}", firstRoleId)
+        mockMvc.perform(put("/plugins/system/admin/roles/{id}", firstRoleId)
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -233,14 +233,14 @@ class UserRoleManagementTest {
                                 """))
                 .andExpect(status().isOk());
 
-        MvcResult permissionsResult = mockMvc.perform(get("/api/roles/{id}/permissions", firstRoleId)
+        MvcResult permissionsResult = mockMvc.perform(get("/plugins/system/admin/roles/{id}/permissions", firstRoleId)
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(json(permissionsResult).path("data")).hasSize(1);
         assertThat(json(permissionsResult).path("data").get(0).asText()).isEqualTo("role:view");
 
-        mockMvc.perform(put("/api/roles/{id}/permissions", firstRoleId)
+        mockMvc.perform(put("/plugins/system/admin/roles/{id}/permissions", firstRoleId)
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -248,7 +248,7 @@ class UserRoleManagementTest {
                                 """))
                 .andExpect(status().isOk());
 
-        MvcResult treeResult = mockMvc.perform(get("/api/resources/tree")
+        MvcResult treeResult = mockMvc.perform(get("/plugins/system/admin/resources/tree")
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -256,7 +256,7 @@ class UserRoleManagementTest {
         assertThat(systemResources.isArray()).isTrue();
         assertThat(systemResources).isNotEmpty();
 
-        mockMvc.perform(put("/api/roles/{id}/resources", firstRoleId)
+        mockMvc.perform(put("/plugins/system/admin/roles/{id}/resources", firstRoleId)
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -264,13 +264,13 @@ class UserRoleManagementTest {
                                 """))
                 .andExpect(status().isOk());
 
-        MvcResult roleResourcesResult = mockMvc.perform(get("/api/roles/{id}/resources", firstRoleId)
+        MvcResult roleResourcesResult = mockMvc.perform(get("/plugins/system/admin/roles/{id}/resources", firstRoleId)
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(json(roleResourcesResult).path("data")).hasSize(2);
 
-        MvcResult createdUser = mockMvc.perform(post("/api/users")
+        MvcResult createdUser = mockMvc.perform(post("/plugins/system/admin/users")
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -286,7 +286,7 @@ class UserRoleManagementTest {
                 .andReturn();
         long userId = json(createdUser).path("data").path("id").asLong();
 
-        mockMvc.perform(put("/api/roles/{id}/users", firstRoleId)
+        mockMvc.perform(put("/plugins/system/admin/roles/{id}/users", firstRoleId)
                         .header(AUTHORIZATION, token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -294,14 +294,14 @@ class UserRoleManagementTest {
                                 """.formatted(userId)))
                 .andExpect(status().isOk());
 
-        MvcResult roleUsersResult = mockMvc.perform(get("/api/roles/{id}/users", firstRoleId)
+        MvcResult roleUsersResult = mockMvc.perform(get("/plugins/system/admin/roles/{id}/users", firstRoleId)
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(json(roleUsersResult).path("data")).hasSize(1);
         assertThat(json(roleUsersResult).path("data").get(0).path("id").asLong()).isEqualTo(userId);
 
-        MvcResult updatedDetailResult = mockMvc.perform(get("/api/roles/{id}", firstRoleId)
+        MvcResult updatedDetailResult = mockMvc.perform(get("/plugins/system/admin/roles/{id}", firstRoleId)
                         .header(AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn();

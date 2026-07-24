@@ -17,5 +17,6 @@
         <module>pyin-plugin-config</module>
         <module>pyin-plugin-dict</module>
         <module>pyin-plugin-file</module>
+        <module>pyin-plugin-export-workshop</module>
     </modules>
 </project>

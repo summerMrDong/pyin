@@ -3,7 +3,7 @@ package com.pyin.plugin.bootstrap;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pyin.plugin.common.constant.PyinHeaders;
-import com.pyin.plugin.system.system.CoreSchemaInitializer;
+import com.pyin.plugin.system.setting.support.CoreSchemaInitializer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -47,7 +47,7 @@ class ClientCredentialFlowTest {
     void shouldManageCredentialAuthenticateClientAndRecordLogs() throws Exception {
         String adminToken = adminToken();
 
-        MvcResult createResult = mockMvc.perform(post("/api/core/client-credentials")
+        MvcResult createResult = mockMvc.perform(post("/plugins/system/admin/client-credentials")
                         .header(AUTHORIZATION, adminToken)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -62,7 +62,7 @@ class ClientCredentialFlowTest {
         assertThat(accessKey).startsWith("cck_");
         assertThat(accessSecret).startsWith("ccs_");
 
-        MvcResult listResult = mockMvc.perform(get("/api/core/client-credentials")
+        MvcResult listResult = mockMvc.perform(get("/plugins/system/admin/client-credentials")
                         .header(AUTHORIZATION, adminToken)
                         .param("credentialName", "订单系统"))
                 .andExpect(status().isOk())
@@ -75,11 +75,11 @@ class ClientCredentialFlowTest {
         String clientToken = clientToken(accessKey, accessSecret);
         assertThat(clientToken).isNotBlank();
 
-        mockMvc.perform(get("/capi/plugins/dict/client/dict/items")
+        mockMvc.perform(get("/plugins/dict/open/dict/items")
                         .header(AUTHORIZATION, clientToken))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
 
-        MvcResult rotateResult = mockMvc.perform(post("/api/core/client-credentials/{id}/rotate-secret", credentialId)
+        MvcResult rotateResult = mockMvc.perform(post("/plugins/system/admin/client-credentials/{id}/rotate-secret", credentialId)
                         .header(AUTHORIZATION, adminToken))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -87,26 +87,26 @@ class ClientCredentialFlowTest {
         assertThat(rotatedSecret).startsWith("ccs_");
         assertThat(rotatedSecret).isNotEqualTo(accessSecret);
 
-        mockMvc.perform(post("/capi/auth/token")
-                        .headers(buildClientAuthHeaders(accessKey, accessSecret, "/capi/auth/token", "POST", new byte[0])))
+        mockMvc.perform(post("/open/auth/token")
+                        .headers(buildClientAuthHeaders(accessKey, accessSecret, "/open/auth/token", "POST", new byte[0])))
                 .andExpect(status().isUnauthorized());
 
         String rotatedToken = clientToken(accessKey, rotatedSecret);
         assertThat(rotatedToken).isNotBlank();
 
-        mockMvc.perform(post("/api/core/client-credentials/{id}/disable", credentialId)
+        mockMvc.perform(post("/plugins/system/admin/client-credentials/{id}/disable", credentialId)
                         .header(AUTHORIZATION, adminToken))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/capi/auth/refresh")
-                        .header(AUTHORIZATION, rotatedToken))
+        mockMvc.perform(post("/open/auth/token")
+                        .headers(buildClientAuthHeaders(accessKey, rotatedSecret, "/open/auth/token", "POST", new byte[0])))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/capi/plugins/dict/client/dict/items")
+        mockMvc.perform(get("/plugins/dict/open/dict/items")
                         .header(AUTHORIZATION, rotatedToken))
                 .andExpect(status().isUnauthorized());
 
-        MvcResult logsResult = mockMvc.perform(get("/api/core/client-credentials/{id}/request-logs", credentialId)
+        MvcResult logsResult = mockMvc.perform(get("/plugins/system/admin/client-credentials/{id}/request-logs", credentialId)
                         .header(AUTHORIZATION, adminToken))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -115,14 +115,12 @@ class ClientCredentialFlowTest {
         assertThat(logs).isNotEmpty();
         assertThat(findLog(logs, "AUTH_TOKEN", "SUCCESS")).isTrue();
         assertThat(findLog(logs, "AUTH_TOKEN", "FAILED")).isTrue();
-        assertThat(findLog(logs, "PLUGIN_CLIENT_API", "FAILED")).isTrue();
-        assertThat(findLog(logs, "AUTH_REFRESH", "FAILED")).isTrue();
     }
 
     @Test
     void shouldRejectBadTimestampAndRepeatedNonce() throws Exception {
         String adminToken = adminToken();
-        MvcResult createResult = mockMvc.perform(post("/api/core/client-credentials")
+        MvcResult createResult = mockMvc.perform(post("/plugins/system/admin/client-credentials")
                         .header(AUTHORIZATION, adminToken)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -139,19 +137,19 @@ class ClientCredentialFlowTest {
         String expiredTimestamp = String.valueOf(Instant.now().minusSeconds(600).toEpochMilli());
         String bodySha = sha256(emptyBody);
 
-        mockMvc.perform(post("/capi/auth/token")
+        mockMvc.perform(post("/open/auth/token")
                         .header(PyinHeaders.ACCESS_KEY, accessKey)
                         .header(PyinHeaders.TIMESTAMP, expiredTimestamp)
                         .header(PyinHeaders.NONCE, nonce)
                         .header(PyinHeaders.BODY_SHA256, bodySha)
-                        .header(PyinHeaders.SIGNATURE, signature("POST", "/capi/auth/token", accessKey, expiredTimestamp, nonce, bodySha, accessSecret)))
+                        .header(PyinHeaders.SIGNATURE, signature("POST", "/open/auth/token", accessKey, expiredTimestamp, nonce, bodySha, accessSecret)))
                 .andExpect(status().isRequestTimeout());
 
         String timestamp = String.valueOf(Instant.now().toEpochMilli());
         String signedNonce = UUID.randomUUID().toString();
-        String validSignature = signature("POST", "/capi/auth/token", accessKey, timestamp, signedNonce, bodySha, accessSecret);
+        String validSignature = signature("POST", "/open/auth/token", accessKey, timestamp, signedNonce, bodySha, accessSecret);
 
-        mockMvc.perform(post("/capi/auth/token")
+        mockMvc.perform(post("/open/auth/token")
                         .header(PyinHeaders.ACCESS_KEY, accessKey)
                         .header(PyinHeaders.TIMESTAMP, timestamp)
                         .header(PyinHeaders.NONCE, signedNonce)
@@ -159,13 +157,19 @@ class ClientCredentialFlowTest {
                         .header(PyinHeaders.SIGNATURE, validSignature))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/capi/auth/token")
+        mockMvc.perform(post("/open/auth/token")
                         .header(PyinHeaders.ACCESS_KEY, accessKey)
                         .header(PyinHeaders.TIMESTAMP, timestamp)
                         .header(PyinHeaders.NONCE, signedNonce)
                         .header(PyinHeaders.BODY_SHA256, bodySha)
                         .header(PyinHeaders.SIGNATURE, validSignature))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldRequireClientTokenForOpenEvents() throws Exception {
+        mockMvc.perform(get("/open/events/stream"))
+                .andExpect(status().isUnauthorized());
     }
 
     private String adminToken() throws Exception {
@@ -180,8 +184,8 @@ class ClientCredentialFlowTest {
     }
 
     private String clientToken(String accessKey, String accessSecret) throws Exception {
-        MvcResult tokenResult = mockMvc.perform(post("/capi/auth/token")
-                        .headers(buildClientAuthHeaders(accessKey, accessSecret, "/capi/auth/token", "POST", new byte[0])))
+        MvcResult tokenResult = mockMvc.perform(post("/open/auth/token")
+                        .headers(buildClientAuthHeaders(accessKey, accessSecret, "/open/auth/token", "POST", new byte[0])))
                 .andExpect(status().isOk())
                 .andReturn();
         return json(tokenResult).path("data").path("token").asText();

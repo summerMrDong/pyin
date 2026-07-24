@@ -1,7 +1,12 @@
 package com.pyin.plugin.file.model;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.InputStream;
 
+@Getter
+@Setter
 public class FileBinaryResource {
 
     private final FileInfoRecord record;
@@ -12,11 +17,4 @@ public class FileBinaryResource {
         this.inputStream = inputStream;
     }
 
-    public FileInfoRecord getRecord() {
-        return record;
-    }
-
-    public InputStream getInputStream() {
-        return inputStream;
-    }
 }

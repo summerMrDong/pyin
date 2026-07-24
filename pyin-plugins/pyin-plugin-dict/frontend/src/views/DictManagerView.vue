@@ -1,602 +1,405 @@
 <template>
-  <section class="dict-page">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">System Plugin</p>
-        <h1>字典管理</h1>
-        <p class="subtitle">维护字典类型与字典项，适合承载系统级标签、状态枚举和展示文案。</p>
+  <section class="console-page">
+    <el-card shadow="never" class="workspace-card">
+      <div class="dict-workspace">
+        <aside class="type-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>字典类型</span>
+              <el-tag size="small" effect="plain">{{ filteredTypes.length }}</el-tag>
+            </div>
+            <el-button type="success" size="small" @click="openTypeCreate">新建类型</el-button>
+          </div>
+
+          <div class="type-filters">
+            <el-input v-model="typeKeyword" placeholder="搜索类型编码或名称" clearable />
+            <el-select v-model="typeStatus" placeholder="全部状态" clearable>
+              <el-option label="启用" value="ENABLED" />
+              <el-option label="停用" value="DISABLED" />
+            </el-select>
+          </div>
+
+          <div v-loading="typesLoading" class="type-list">
+            <el-empty v-if="!filteredTypes.length && !typesLoading" description="暂无字典类型" :image-size="88">
+              <el-button type="primary" size="small" @click="openTypeCreate">新建字典类型</el-button>
+            </el-empty>
+            <div
+              v-for="type in filteredTypes"
+              :key="type.id"
+              class="type-row"
+              :class="{ active: type.id === selectedTypeId }"
+              role="button"
+              tabindex="0"
+              @click="selectType(type.id)"
+              @keydown.enter.prevent="selectType(type.id)"
+              @keydown.space.prevent="selectType(type.id)"
+            >
+              <div class="type-row-main">
+                <span class="type-name">{{ type.typeName }}</span>
+                <el-tag :type="type.status === 'ENABLED' ? 'success' : 'info'" effect="plain" size="small">
+                  {{ type.status === 'ENABLED' ? '启用' : '停用' }}
+                </el-tag>
+              </div>
+              <div class="type-code">{{ type.typeCode }}</div>
+              <div class="type-row-footer">
+                <span>{{ type.itemCount }} 个字典项</span>
+                <span class="type-row-actions">
+                  <el-button link type="primary" @click.stop="openTypeEdit(type)">编辑</el-button>
+                  <el-tooltip :disabled="!type.itemCount" content="请先删除该类型下的全部字典项" placement="top">
+                    <span>
+                      <el-button link type="danger" :disabled="Boolean(type.itemCount)" @click.stop="confirmTypeDelete(type)">删除</el-button>
+                    </span>
+                  </el-tooltip>
+                </span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main v-if="selectedType" class="items-panel">
+          <div class="items-panel-header">
+            <div class="selected-type-summary">
+              <div class="selected-type-title">
+                <h2>{{ selectedType.typeName }}</h2>
+                <el-tag :type="selectedType.status === 'ENABLED' ? 'success' : 'info'" effect="plain" size="small">
+                  {{ selectedType.status === 'ENABLED' ? '启用' : '停用' }}
+                </el-tag>
+              </div>
+              <div class="selected-type-meta">
+                <code>{{ selectedType.typeCode }}</code>
+                <span>{{ selectedType.itemCount }} 个字典项</span>
+                <span v-if="selectedType.description">{{ selectedType.description }}</span>
+              </div>
+            </div>
+            <div class="header-actions">
+              <el-button @click="openTypeEdit(selectedType)">编辑类型</el-button>
+              <el-button :loading="itemsLoading" @click="loadItems">刷新</el-button>
+              <el-button type="success" @click="openItemCreate">新建字典项</el-button>
+            </div>
+          </div>
+
+          <div class="items-toolbar">
+            <el-input v-model="itemKeyword" placeholder="搜索字典值或标签" clearable />
+            <span>当前显示 {{ filteredItems.length }} 项</span>
+          </div>
+
+          <el-table :data="filteredItems" v-loading="itemsLoading" class="items-table">
+            <el-table-column prop="itemValue" label="字典值" min-width="150" class-name="code-cell" />
+            <el-table-column prop="itemLabel" label="字典标签" min-width="160" />
+            <el-table-column prop="itemSort" label="排序" width="90" />
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.itemStatus === 'ENABLED' ? 'success' : 'info'" effect="plain">
+                  {{ row.itemStatus === 'ENABLED' ? '启用' : '停用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="描述" min-width="220">
+              <template #default="{ row }"><span>{{ row.description || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="操作" width="150" fixed="right">
+              <template #default="{ row }">
+                <div class="row-actions">
+                  <el-button link type="primary" @click="openItemEdit(row)">编辑</el-button>
+                  <el-button link type="danger" @click="confirmItemDelete(row)">删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </main>
+
+        <main v-else class="items-panel empty-panel">
+          <el-empty description="请选择或新建一个字典类型">
+            <el-button type="primary" @click="openTypeCreate">新建字典类型</el-button>
+          </el-empty>
+        </main>
       </div>
-      <button class="ghost-button" @click="refreshAll">刷新数据</button>
-    </header>
+    </el-card>
 
-    <p v-if="errorMessage" class="feedback error">{{ errorMessage }}</p>
-    <p v-if="successMessage" class="feedback success">{{ successMessage }}</p>
+    <el-drawer v-model="typeEditorVisible" :title="typeEditorMode === 'create' ? '新建字典类型' : '编辑字典类型'" size="480px" destroy-on-close>
+      <el-form ref="typeFormRef" :model="typeForm" :rules="typeRules" label-position="top">
+        <el-form-item label="类型编码" prop="typeCode"><el-input v-model.trim="typeForm.typeCode" placeholder="例如 order_status" /></el-form-item>
+        <el-form-item label="类型名称" prop="typeName"><el-input v-model.trim="typeForm.typeName" placeholder="例如 订单状态" /></el-form-item>
+        <el-form-item label="状态" prop="status">
+          <el-radio-group v-model="typeForm.status"><el-radio-button label="ENABLED">启用</el-radio-button><el-radio-button label="DISABLED">停用</el-radio-button></el-radio-group>
+        </el-form-item>
+        <el-form-item label="描述"><el-input v-model.trim="typeForm.description" type="textarea" :rows="3" placeholder="说明该字典的用途" /></el-form-item>
+      </el-form>
+      <template #footer><div class="drawer-footer"><el-button @click="typeEditorVisible = false">取消</el-button><el-button type="primary" :loading="typeSaving" @click="submitType">保存</el-button></div></template>
+    </el-drawer>
 
-    <section class="overview-grid">
-      <article class="stat-card accent">
-        <span>字典类型数</span>
-        <strong>{{ types.length }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>字典项数</span>
-        <strong>{{ items.length }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>当前类型</span>
-        <strong>{{ selectedTypeLabel }}</strong>
-      </article>
-    </section>
-
-    <section class="workspace">
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>字典类型</h2>
-            <p>定义每个字典的编码、名称和启用状态。</p>
-          </div>
-          <button class="primary-button" @click="editType(null)">新增类型</button>
+    <el-drawer v-model="itemEditorVisible" :title="itemEditorMode === 'create' ? '新建字典项' : '编辑字典项'" size="480px" destroy-on-close>
+      <el-form ref="itemFormRef" :model="itemForm" :rules="itemRules" label-position="top">
+        <el-form-item label="所属类型"><el-input :model-value="itemTypeLabel" disabled /></el-form-item>
+        <el-form-item label="字典值" prop="itemValue"><el-input v-model.trim="itemForm.itemValue" placeholder="例如 PAID" /></el-form-item>
+        <el-form-item label="字典标签" prop="itemLabel"><el-input v-model.trim="itemForm.itemLabel" placeholder="例如 已支付" /></el-form-item>
+        <div class="form-split">
+          <el-form-item label="排序"><el-input-number v-model="itemForm.itemSort" :min="0" controls-position="right" /></el-form-item>
+          <el-form-item label="状态" prop="itemStatus"><el-radio-group v-model="itemForm.itemStatus"><el-radio-button label="ENABLED">启用</el-radio-button><el-radio-button label="DISABLED">停用</el-radio-button></el-radio-group></el-form-item>
         </div>
-
-        <div class="type-grid">
-          <button
-            class="type-card"
-            :class="{ active: selectedTypeId === null }"
-            @click="selectType(null)"
-          >
-            <strong>全部类型</strong>
-            <span>查看所有字典项</span>
-          </button>
-          <button
-            v-for="type in types"
-            :key="type.id"
-            class="type-card"
-            :class="{ active: selectedTypeId === type.id }"
-            @click="selectType(type.id)"
-          >
-            <strong>{{ type.typeName }}</strong>
-            <span>{{ type.typeCode }}</span>
-            <small>{{ type.itemCount }} 个字典项</small>
-          </button>
-        </div>
-
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>类型编码</th>
-              <th>类型名称</th>
-              <th>状态</th>
-              <th>字典项数</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="type in types" :key="type.id">
-              <td>{{ type.typeCode }}</td>
-              <td>{{ type.typeName }}</td>
-              <td>{{ type.status }}</td>
-              <td>{{ type.itemCount }}</td>
-              <td class="actions">
-                <button class="text-button" @click="editType(type)">编辑</button>
-                <button class="text-button danger" @click="removeType(type.id)">删除</button>
-              </td>
-            </tr>
-            <tr v-if="types.length === 0">
-              <td colspan="5" class="empty-state">还没有字典类型，先创建一个吧。</td>
-            </tr>
-          </tbody>
-        </table>
-      </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>字典项</h2>
-            <p>维护当前字典类型下的值、标签与排序。</p>
-          </div>
-          <button class="primary-button" @click="editItem(null)">新增字典项</button>
-        </div>
-
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>字典值</th>
-              <th>字典标签</th>
-              <th>类型</th>
-              <th>排序</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in items" :key="item.id">
-              <td>{{ item.itemValue }}</td>
-              <td>{{ item.itemLabel }}</td>
-              <td>{{ item.typeCode }}</td>
-              <td>{{ item.itemSort }}</td>
-              <td>{{ item.itemStatus }}</td>
-              <td class="actions">
-                <button class="text-button" @click="editItem(item)">编辑</button>
-                <button class="text-button danger" @click="removeItem(item.id)">删除</button>
-              </td>
-            </tr>
-            <tr v-if="items.length === 0">
-              <td colspan="6" class="empty-state">当前筛选条件下没有字典项。</td>
-            </tr>
-          </tbody>
-        </table>
-      </article>
-    </section>
-
-    <section class="form-grid">
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>{{ typeForm.id ? '编辑字典类型' : '新增字典类型' }}</h2>
-            <p>字典类型定义好之后，右侧即可补充字典项。</p>
-          </div>
-        </div>
-        <form class="editor-form" @submit.prevent="submitType">
-          <label>
-            <span>类型编码</span>
-            <input v-model.trim="typeForm.typeCode" required placeholder="例如 order_status">
-          </label>
-          <label>
-            <span>类型名称</span>
-            <input v-model.trim="typeForm.typeName" required placeholder="例如 订单状态">
-          </label>
-          <div class="inline-fields">
-            <label>
-              <span>状态</span>
-              <select v-model="typeForm.status">
-                <option>ENABLED</option>
-                <option>DISABLED</option>
-              </select>
-            </label>
-            <label>
-              <span>描述</span>
-              <input v-model.trim="typeForm.description" placeholder="说明这个字典的用途">
-            </label>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="ghost-button" @click="resetTypeForm">清空</button>
-            <button type="submit" class="primary-button">保存字典类型</button>
-          </div>
-        </form>
-      </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>{{ itemForm.id ? '编辑字典项' : '新增字典项' }}</h2>
-            <p>字典项决定前端/业务系统最终展示给用户的标签内容。</p>
-          </div>
-        </div>
-        <form class="editor-form" @submit.prevent="submitItem">
-          <label>
-            <span>所属类型</span>
-            <select v-model.number="itemForm.typeId" required>
-              <option disabled value="">请选择字典类型</option>
-              <option v-for="type in types" :key="type.id" :value="type.id">
-                {{ type.typeName }} ({{ type.typeCode }})
-              </option>
-            </select>
-          </label>
-          <div class="inline-fields">
-            <label>
-              <span>字典值</span>
-              <input v-model.trim="itemForm.itemValue" required placeholder="例如 PAID">
-            </label>
-            <label>
-              <span>字典标签</span>
-              <input v-model.trim="itemForm.itemLabel" required placeholder="例如 已支付">
-            </label>
-          </div>
-          <div class="inline-fields">
-            <label>
-              <span>排序</span>
-              <input v-model.number="itemForm.itemSort" type="number" min="0">
-            </label>
-            <label>
-              <span>状态</span>
-              <select v-model="itemForm.itemStatus">
-                <option>ENABLED</option>
-                <option>DISABLED</option>
-              </select>
-            </label>
-          </div>
-          <label>
-            <span>描述</span>
-            <textarea v-model.trim="itemForm.description" rows="3" placeholder="描述这个字典项的业务含义"></textarea>
-          </label>
-          <div class="form-actions">
-            <button type="button" class="ghost-button" @click="resetItemForm">清空</button>
-            <button type="submit" class="primary-button">保存字典项</button>
-          </div>
-        </form>
-      </article>
-    </section>
+        <el-form-item label="描述"><el-input v-model.trim="itemForm.description" type="textarea" :rows="3" placeholder="描述该字典项的业务含义" /></el-form-item>
+      </el-form>
+      <template #footer><div class="drawer-footer"><el-button @click="itemEditorVisible = false">取消</el-button><el-button type="primary" :loading="itemSaving" @click="submitItem">保存</el-button></div></template>
+    </el-drawer>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import {
-  deleteItem,
-  deleteType,
-  fetchItemDetail,
-  fetchItems,
-  fetchTypes,
-  saveItem,
-  saveType
-} from '../api/dictAdminApi'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { deleteItem, deleteType, fetchItemDetail, fetchItems, fetchTypes, saveItem, saveType } from '../api/dictAdminApi'
 
 const types = ref([])
 const items = ref([])
-const selectedTypeId = ref(null)
-const errorMessage = ref('')
-const successMessage = ref('')
-
+const selectedTypeId = ref()
+const typesLoading = ref(false)
+const itemsLoading = ref(false)
+const typeSaving = ref(false)
+const itemSaving = ref(false)
+const typeEditorVisible = ref(false)
+const itemEditorVisible = ref(false)
+const typeEditorMode = ref('create')
+const itemEditorMode = ref('create')
+const typeFormRef = ref()
+const itemFormRef = ref()
+const typeKeyword = ref('')
+const typeStatus = ref('')
+const itemKeyword = ref('')
 const typeForm = reactive(createTypeForm())
 const itemForm = reactive(createItemForm())
 
-const selectedTypeLabel = computed(() => {
-  if (selectedTypeId.value == null) {
-    return '全部类型'
-  }
-  const type = types.value.find((item) => item.id === selectedTypeId.value)
-  return type ? type.typeName : '未选择'
-})
-
-onMounted(async () => {
-  await refreshAll()
-})
-
-async function refreshAll() {
-  clearMessages()
-  await Promise.all([loadTypes(), loadItems()])
+const typeRules = {
+  typeCode: [{ required: true, message: '请输入类型编码', trigger: 'blur' }],
+  typeName: [{ required: true, message: '请输入类型名称', trigger: 'blur' }],
+  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
+}
+const itemRules = {
+  itemValue: [{ required: true, message: '请输入字典值', trigger: 'blur' }],
+  itemLabel: [{ required: true, message: '请输入字典标签', trigger: 'blur' }],
+  itemStatus: [{ required: true, message: '请选择状态', trigger: 'change' }]
 }
 
-async function loadTypes() {
-  types.value = await fetchTypes()
-  if (selectedTypeId.value != null && !types.value.some((item) => item.id === selectedTypeId.value)) {
-    selectedTypeId.value = null
+const filteredTypes = computed(() => {
+  const keyword = typeKeyword.value.trim().toLowerCase()
+  return types.value.filter((type) =>
+    (!keyword || type.typeCode.toLowerCase().includes(keyword) || type.typeName.toLowerCase().includes(keyword))
+    && (!typeStatus.value || type.status === typeStatus.value)
+  )
+})
+const selectedType = computed(() => types.value.find((type) => type.id === selectedTypeId.value))
+const itemTypeLabel = computed(() => selectedType.value ? `${selectedType.value.typeName} (${selectedType.value.typeCode})` : '')
+const filteredItems = computed(() => {
+  const keyword = itemKeyword.value.trim().toLowerCase()
+  return items.value.filter((item) => !keyword || item.itemValue.toLowerCase().includes(keyword) || item.itemLabel.toLowerCase().includes(keyword))
+})
+
+watch([typeKeyword, typeStatus], () => { void synchronizeSelectedType() })
+
+onMounted(async () => { await loadTypes() })
+
+async function loadTypes(preferred = {}) {
+  typesLoading.value = true
+  try {
+    types.value = await fetchTypes()
+    const preferredType = types.value.find((type) => type.id === preferred.id || type.typeCode === preferred.code)
+    if (preferredType) selectedTypeId.value = preferredType.id
+    await synchronizeSelectedType()
+  } catch (error) {
+    ElMessage.error(error.message || '加载字典类型失败')
+  } finally {
+    typesLoading.value = false
   }
+}
+
+async function synchronizeSelectedType() {
+  const visibleSelectedType = filteredTypes.value.find((type) => type.id === selectedTypeId.value)
+  if (visibleSelectedType) return
+  const fallbackType = filteredTypes.value[0]
+  if (fallbackType) {
+    await selectType(fallbackType.id)
+  } else {
+    selectedTypeId.value = undefined
+    items.value = []
+  }
+}
+
+async function selectType(typeId) {
+  if (selectedTypeId.value === typeId && items.value.length) return
+  selectedTypeId.value = typeId
+  await loadItems()
 }
 
 async function loadItems() {
+  if (!selectedTypeId.value) {
+    items.value = []
+    return
+  }
+  itemsLoading.value = true
   try {
     items.value = await fetchItems(selectedTypeId.value)
   } catch (error) {
-    errorMessage.value = error.message
+    ElMessage.error(error.message || '加载字典项失败')
+  } finally {
+    itemsLoading.value = false
   }
 }
 
-function selectType(id) {
-  selectedTypeId.value = id
-  loadItems()
-}
-
-function editType(type) {
-  Object.assign(typeForm, createTypeForm(type))
-}
-
-function resetTypeForm() {
+async function openTypeCreate() {
+  typeEditorMode.value = 'create'
   Object.assign(typeForm, createTypeForm())
+  typeEditorVisible.value = true
+  await nextTick()
+  typeFormRef.value?.clearValidate()
+}
+
+async function openTypeEdit(row) {
+  typeEditorMode.value = 'edit'
+  Object.assign(typeForm, createTypeForm(row))
+  typeEditorVisible.value = true
+  await nextTick()
+  typeFormRef.value?.clearValidate()
+}
+
+async function openItemCreate() {
+  if (!selectedType.value) {
+    ElMessage.warning('请先选择字典类型')
+    return
+  }
+  itemEditorMode.value = 'create'
+  Object.assign(itemForm, createItemForm({ typeId: selectedType.value.id }))
+  itemEditorVisible.value = true
+  await nextTick()
+  itemFormRef.value?.clearValidate()
+}
+
+async function openItemEdit(row) {
+  try {
+    const detail = await fetchItemDetail(row.id)
+    itemEditorMode.value = 'edit'
+    Object.assign(itemForm, createItemForm(detail))
+    itemEditorVisible.value = true
+    await nextTick()
+    itemFormRef.value?.clearValidate()
+  } catch (error) {
+    ElMessage.error(error.message || '加载字典项详情失败')
+  }
 }
 
 async function submitType() {
   try {
-    clearMessages()
-    await saveType(typeForm)
-    successMessage.value = '字典类型已保存。'
-    resetTypeForm()
-    await loadTypes()
-  } catch (error) {
-    errorMessage.value = error.message
-  }
-}
-
-async function removeType(id) {
-  try {
-    clearMessages()
-    await deleteType(id)
-    successMessage.value = '字典类型已删除。'
-    if (selectedTypeId.value === id) {
-      selectedTypeId.value = null
+    await typeFormRef.value?.validate()
+    typeSaving.value = true
+    const savedCode = typeForm.typeCode
+    const created = typeEditorMode.value === 'create'
+    await saveType({ ...typeForm })
+    typeEditorVisible.value = false
+    ElMessage.success(created ? '字典类型已创建' : '字典类型已更新')
+    if (created) {
+      typeKeyword.value = ''
+      typeStatus.value = ''
     }
-    await Promise.all([loadTypes(), loadItems()])
+    await loadTypes({ code: savedCode })
   } catch (error) {
-    errorMessage.value = error.message
+    if (error?.message) ElMessage.error(error.message)
+  } finally {
+    typeSaving.value = false
   }
-}
-
-async function editItem(item) {
-  if (!item?.id) {
-    Object.assign(itemForm, createItemForm({ typeId: selectedTypeId.value ?? '' }))
-    return
-  }
-  try {
-    clearMessages()
-    const detail = await fetchItemDetail(item.id)
-    Object.assign(itemForm, createItemForm(detail))
-  } catch (error) {
-    errorMessage.value = error.message
-  }
-}
-
-function resetItemForm() {
-  Object.assign(itemForm, createItemForm({ typeId: selectedTypeId.value ?? '' }))
 }
 
 async function submitItem() {
   try {
-    clearMessages()
-    await saveItem(itemForm)
-    successMessage.value = '字典项已保存。'
-    resetItemForm()
-    await Promise.all([loadItems(), loadTypes()])
+    await itemFormRef.value?.validate()
+    itemSaving.value = true
+    const created = itemEditorMode.value === 'create'
+    await saveItem({ ...itemForm })
+    itemEditorVisible.value = false
+    ElMessage.success(created ? '字典项已创建' : '字典项已更新')
+    await Promise.all([loadTypes(), loadItems()])
   } catch (error) {
-    errorMessage.value = error.message
+    if (error?.message) ElMessage.error(error.message)
+  } finally {
+    itemSaving.value = false
   }
 }
 
-async function removeItem(id) {
+async function confirmTypeDelete(row) {
+  if (row.itemCount) return
   try {
-    clearMessages()
-    await deleteItem(id)
-    successMessage.value = '字典项已删除。'
-    await Promise.all([loadItems(), loadTypes()])
+    await ElMessageBox.confirm(`确定删除字典类型“${row.typeName}”吗？`, '删除字典类型', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+    const index = filteredTypes.value.findIndex((type) => type.id === row.id)
+    const fallback = filteredTypes.value[index + 1] || filteredTypes.value[index - 1]
+    await deleteType(row.id)
+    if (selectedTypeId.value === row.id) selectedTypeId.value = undefined
+    ElMessage.success('字典类型已删除')
+    await loadTypes({ id: fallback?.id })
   } catch (error) {
-    errorMessage.value = error.message
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message || '删除字典类型失败')
   }
 }
 
-function clearMessages() {
-  errorMessage.value = ''
-  successMessage.value = ''
+async function confirmItemDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确定删除字典项“${row.itemLabel}”吗？`, '删除字典项', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+    await deleteItem(row.id)
+    ElMessage.success('字典项已删除')
+    await Promise.all([loadTypes(), loadItems()])
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message || '删除字典项失败')
+  }
 }
 
 function createTypeForm(source = {}) {
-  return {
-    id: source.id ?? null,
-    typeCode: source.typeCode ?? '',
-    typeName: source.typeName ?? '',
-    status: source.status ?? 'ENABLED',
-    description: source.description ?? ''
-  }
+  return { id: source.id ?? null, typeCode: source.typeCode ?? '', typeName: source.typeName ?? '', status: source.status ?? 'ENABLED', description: source.description ?? '' }
 }
 
 function createItemForm(source = {}) {
-  return {
-    id: source.id ?? null,
-    typeId: source.typeId ?? '',
-    itemValue: source.itemValue ?? '',
-    itemLabel: source.itemLabel ?? '',
-    itemSort: source.itemSort ?? 100,
-    itemStatus: source.itemStatus ?? 'ENABLED',
-    description: source.description ?? ''
-  }
+  return { id: source.id ?? null, typeId: source.typeId ?? '', itemValue: source.itemValue ?? '', itemLabel: source.itemLabel ?? '', itemSort: source.itemSort ?? 100, itemStatus: source.itemStatus ?? 'ENABLED', description: source.description ?? '' }
 }
 </script>
 
 <style scoped>
-.dict-page {
-  display: grid;
-  gap: 24px;
-  color: var(--text-primary);
-}
-
-.hero,
-.panel,
-.stat-card,
-.type-card {
-  border: 1px solid var(--panel-border);
-  background: var(--panel-bg);
-  box-shadow: var(--panel-shadow);
-  border-radius: 24px;
-}
-
-.hero,
-.panel {
-  padding: 24px;
-}
-
-.hero {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: flex-start;
-  background:
-    radial-gradient(circle at top right, rgba(34, 139, 84, 0.16), transparent 35%),
-    var(--panel-bg);
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-h1,
-h2,
-p {
-  margin: 0;
-}
-
-.subtitle {
-  margin-top: 10px;
-  max-width: 720px;
-  color: var(--text-secondary);
-}
-
-.overview-grid,
-.workspace,
-.form-grid,
-.inline-fields,
-.panel-header,
-.form-actions {
-  display: grid;
-  gap: 16px;
-}
-
-.overview-grid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.workspace,
-.form-grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-
-.stat-card {
-  padding: 18px 20px;
-}
-
-.stat-card span {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.stat-card strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 28px;
-}
-
-.stat-card.accent {
-  background: linear-gradient(135deg, rgba(34, 139, 84, 0.14), var(--panel-bg));
-}
-
-.type-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin: 18px 0 20px;
-}
-
-.type-card {
-  padding: 16px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.type-card strong,
-.type-card span,
-.type-card small {
-  display: block;
-}
-
-.type-card span,
-.type-card small {
-  margin-top: 6px;
-  color: var(--text-secondary);
-}
-
-.type-card.active {
-  border-color: #228b54;
-  background: rgba(34, 139, 84, 0.08);
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 12px 10px;
-  border-bottom: 1px solid var(--panel-border);
-  text-align: left;
-}
-
-.actions {
-  white-space: nowrap;
-}
-
-.editor-form {
-  display: grid;
-  gap: 14px;
-}
-
-.editor-form label {
-  display: grid;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.editor-form input,
-.editor-form select,
-.editor-form textarea {
-  border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.72);
-  border-radius: 14px;
-  padding: 11px 12px;
-  font: inherit;
-  color: var(--text-primary);
-}
-
-.primary-button,
-.ghost-button,
-.text-button {
-  border: 0;
-  cursor: pointer;
-  font: inherit;
-}
-
-.primary-button,
-.ghost-button {
-  padding: 10px 14px;
-  border-radius: 999px;
-}
-
-.primary-button {
-  background: #228b54;
-  color: white;
-}
-
-.ghost-button {
-  background: rgba(15, 23, 42, 0.06);
-  color: var(--text-primary);
-}
-
-.text-button {
-  background: transparent;
-  color: #228b54;
-  padding: 0 8px 0 0;
-}
-
-.text-button.danger {
-  color: #9f1239;
-}
-
-.feedback {
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 16px;
-}
-
-.feedback.error {
-  background: rgba(159, 18, 57, 0.12);
-  color: #9f1239;
-}
-
-.feedback.success {
-  background: rgba(20, 83, 45, 0.12);
-  color: #166534;
-}
-
-.empty-state {
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-@media (max-width: 760px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-}
+.console-page { min-width: 0; }
+.workspace-card { border: 1px solid var(--shell-tool-border-strong); border-radius: 8px; background: var(--shell-tool-surface); box-shadow: none; }
+.workspace-card :deep(.el-card__body) { padding: 12px; background: var(--shell-tool-surface); }
+.dict-workspace { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: max(560px, calc(100vh - 112px)); }
+.type-panel { display: flex; min-width: 0; flex-direction: column; padding-right: 12px; border-right: 1px solid var(--shell-tool-divider); }
+.panel-header, .panel-title, .type-row-main, .type-row-footer, .items-panel-header, .selected-type-title, .selected-type-meta, .header-actions, .row-actions, .drawer-footer { display: flex; align-items: center; }
+.panel-header, .items-panel-header { justify-content: space-between; gap: 12px; }
+.panel-header { min-height: 36px; }
+.panel-title { gap: 8px; color: var(--shell-tool-header-text); font-size: 14px; font-weight: 600; }
+.panel-title :deep(.el-tag) { --el-tag-bg-color: var(--shell-tool-tag-bg); --el-tag-border-color: var(--shell-tool-tag-border); --el-tag-text-color: var(--shell-tool-tag-text); }
+.type-filters { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; margin: 12px 0 8px; }
+.type-filters :deep(.el-input__wrapper), .type-filters :deep(.el-select__wrapper), .items-toolbar :deep(.el-input__wrapper) { background: var(--shell-tool-toolbar-bg); box-shadow: 0 0 0 1px var(--shell-tool-border-strong) inset; border-radius: 6px; }
+.type-list { min-height: 0; flex: 1; overflow: auto; padding: 2px 2px 2px 0; }
+.type-row { margin-bottom: 6px; padding: 10px; border: 1px solid transparent; border-radius: 7px; color: var(--shell-text-primary); cursor: pointer; outline: none; }
+.type-row:hover, .type-row:focus-visible { background: var(--shell-tool-hover); }
+.type-row.active { border-color: var(--shell-tool-selected-border); background: var(--shell-tool-selected-bg); }
+.type-row-main { justify-content: space-between; gap: 8px; }
+.type-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.type-row :deep(.el-tag), .items-table :deep(.el-tag), .selected-type-title :deep(.el-tag) { --el-tag-bg-color: var(--shell-tool-tag-bg); --el-tag-border-color: var(--shell-tool-tag-border); --el-tag-text-color: var(--shell-tool-tag-text); border-radius: 4px; font-size: 11px; }
+.type-code, .selected-type-meta code, .code-cell :deep(.cell) { font-family: Consolas, "JetBrains Mono", monospace; font-size: 11.5px; }
+.type-code { margin-top: 4px; color: var(--shell-tool-subtle-text); }
+.type-row-footer { justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--shell-text-muted); font-size: 11px; }
+.type-row-actions, .row-actions, .drawer-footer, .header-actions { display: flex; gap: 6px; align-items: center; }
+.type-row-actions :deep(.el-button), .row-actions :deep(.el-button) { padding: 0; font-size: 12px; }
+.items-panel { min-width: 0; padding-left: 16px; }
+.items-panel-header { min-height: 60px; padding-bottom: 12px; border-bottom: 1px solid var(--shell-tool-divider); }
+.selected-type-summary { min-width: 0; }
+.selected-type-title { gap: 8px; }
+.selected-type-title h2 { margin: 0; color: var(--shell-tool-header-text); font-size: 18px; font-weight: 600; }
+.selected-type-meta { flex-wrap: wrap; gap: 8px; margin-top: 6px; color: var(--shell-text-secondary); font-size: 12px; }
+.selected-type-meta code { color: var(--shell-tool-subtle-text); }
+.header-actions { flex-shrink: 0; justify-content: flex-end; }
+.header-actions :deep(.el-button), .panel-header :deep(.el-button) { min-height: 30px; border-radius: 6px; font-size: 12px; }
+.items-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
+.items-toolbar :deep(.el-input) { width: min(360px, 100%); }
+.items-toolbar > span { flex-shrink: 0; color: var(--shell-text-muted); font-size: 12px; }
+.items-table { --el-table-border-color: var(--shell-tool-divider); --el-table-header-bg-color: var(--shell-tool-toolbar-bg); --el-table-row-hover-bg-color: var(--shell-tool-hover); font-size: 12px; }
+.items-table :deep(th.el-table__cell) { padding: 10px 0; color: var(--shell-tool-subtle-text); font-size: 12px; font-weight: 600; }
+.items-table :deep(.el-table__cell) { padding: 10px 0; }
+.items-table :deep(.el-table__inner-wrapper::before) { background-color: var(--shell-tool-divider); }
+.empty-panel { display: grid; place-items: center; }
+.form-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; }
+@media (max-width: 960px) { .dict-workspace { grid-template-columns: 1fr; } .type-panel { max-height: 360px; padding: 0 0 12px; border-right: 0; border-bottom: 1px solid var(--shell-tool-divider); } .items-panel { padding: 16px 0 0; } }
+@media (max-width: 720px) { .workspace-card :deep(.el-card__body) { padding: 10px; } .items-panel-header { align-items: flex-start; flex-direction: column; } .header-actions { flex-wrap: wrap; justify-content: flex-start; } .items-toolbar { align-items: stretch; flex-direction: column; } .items-toolbar :deep(.el-input) { width: 100%; } .form-split { grid-template-columns: 1fr; } }
 </style>

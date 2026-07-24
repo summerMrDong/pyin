@@ -17,18 +17,17 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
             <version>3.5.7</version>
         </dependency>
         <dependency>
             <groupId>com.pyin</groupId>
-            <artifactId>pyin-auth-api</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.pyin</groupId>
-            <artifactId>pyin-auth</artifactId>
+            <artifactId>pyin-plugin-system-api</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -103,11 +102,11 @@
                         </goals>
                         <configuration>
                             <target>
-                                <mkdir dir="${project.basedir}/src/main/resources/plugin-static/pyin-system" />
+                                <mkdir dir="${project.basedir}/src/main/resources/plugin-static/system" />
                                 <delete includeemptydirs="true">
-                                    <fileset dir="${project.basedir}/src/main/resources/plugin-static/pyin-system" excludes=".gitkeep" />
+                                    <fileset dir="${project.basedir}/src/main/resources/plugin-static/system" excludes=".gitkeep" />
                                 </delete>
-                                <copy todir="${project.basedir}/src/main/resources/plugin-static/pyin-system" overwrite="true">
+                                <copy todir="${project.basedir}/src/main/resources/plugin-static/system" overwrite="true">
                                     <fileset dir="${project.basedir}/../frontend/dist" />
                                 </copy>
                             </target>

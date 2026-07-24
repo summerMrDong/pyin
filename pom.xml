@@ -11,6 +11,7 @@
     <description>Pyin 配置中心 P1 聚合工程</description>
 
     <modules>
+        <module>pyin-auth</module>
         <module>pyin-services</module>
         <module>pyin-clients</module>
         <module>pyin-apps</module>
@@ -35,6 +36,15 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
 
     <build>
         <pluginManagement>

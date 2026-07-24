@@ -26,6 +26,7 @@ public class StandalonePluginLifecycle {
     private final StandalonePluginRegistrar standalonePluginRegistrar;
     private final StandalonePluginProperties standalonePluginProperties;
     private final AtomicBoolean registered = new AtomicBoolean(false);
+    private volatile String registeredPluginId;
 
     public StandalonePluginLifecycle(
             ApplicationContext applicationContext,
@@ -48,13 +49,13 @@ public class StandalonePluginLifecycle {
         }
         ResolvedPluginDescriptor descriptor = pluginDescriptorAssembler.assemble(applicationContext, pyinPlugin);
         PluginNodeRegistration registration = new PluginNodeRegistration();
-        registration.setPluginId(descriptor.getPluginId());
-        registration.setNodeId(standalonePluginProperties.getResolvedNodeId());
+        registration.setNodeId(standalonePluginProperties.getResolvedNodeId(descriptor.getPluginId()));
         registration.setBackendBaseUrl(standalonePluginProperties.getResolvedBackendBaseUrl());
-        registration.setFrontendBaseUrl(standalonePluginProperties.getResolvedFrontendBaseUrl());
+        registration.setFrontendBaseUrl(standalonePluginProperties.getResolvedFrontendBaseUrl(descriptor.getPluginId()));
         registration.setHealthUrl(standalonePluginProperties.getResolvedHealthUrl());
         registration.setDescriptor(descriptor);
         standalonePluginRegistrar.register(standalonePluginProperties.getCenterUrl(), registration);
+        registeredPluginId = descriptor.getPluginId();
         registered.set(true);
     }
 
@@ -65,8 +66,8 @@ public class StandalonePluginLifecycle {
         }
         standalonePluginRegistrar.heartbeat(
                 standalonePluginProperties.getCenterUrl(),
-                pyinPlugin.pluginId(),
-                standalonePluginProperties.getResolvedNodeId()
+                registeredPluginId,
+                standalonePluginProperties.getResolvedNodeId(registeredPluginId)
         );
     }
 
@@ -77,8 +78,8 @@ public class StandalonePluginLifecycle {
         }
         standalonePluginRegistrar.offline(
                 standalonePluginProperties.getCenterUrl(),
-                pyinPlugin.pluginId(),
-                standalonePluginProperties.getResolvedNodeId()
+                registeredPluginId,
+                standalonePluginProperties.getResolvedNodeId(registeredPluginId)
         );
     }
 

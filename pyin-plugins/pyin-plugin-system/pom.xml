@@ -13,6 +13,7 @@
     <name>pyin-plugin-system</name>
 
     <modules>
+        <module>api</module>
         <module>backend</module>
     </modules>
 </project>

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * 字典管理后台控制器。
  */
-@AdminMapping
+@AdminMapping("/dict")
 public class DictAdminController {
 
     private final DictAdminService dictAdminService;

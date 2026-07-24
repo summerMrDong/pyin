@@ -147,8 +147,8 @@ public class FileQueryService {
         response.setFileSize(record.getFileSize());
         response.setImage("YES".equals(record.getIsImage()));
         response.setAccessLevel(record.getAccessLevel());
-        response.setPreviewUrl("/api/plugins/file/admin/files/" + record.getFileId() + "/preview");
-        response.setDownloadUrl("/api/plugins/file/admin/files/" + record.getFileId() + "/download");
+        response.setPreviewUrl("/plugins/file/admin/files/" + record.getFileId() + "/preview");
+        response.setDownloadUrl("/plugins/file/admin/files/" + record.getFileId() + "/download");
         response.setContentType(record.getContentType());
         response.setRealMimeType(record.getRealMimeType());
         response.setImageWidth(record.getImageWidth());

@@ -1,5 +1,10 @@
 package com.pyin.plugin.file.model;
 
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
 public class PutObjectResult {
 
     private final String bucketName;
@@ -16,23 +21,4 @@ public class PutObjectResult {
         this.sha256 = sha256;
     }
 
-    public String getBucketName() {
-        return bucketName;
-    }
-
-    public String getObjectKey() {
-        return objectKey;
-    }
-
-    public String getStorageName() {
-        return storageName;
-    }
-
-    public long getFileSize() {
-        return fileSize;
-    }
-
-    public String getSha256() {
-        return sha256;
-    }
 }

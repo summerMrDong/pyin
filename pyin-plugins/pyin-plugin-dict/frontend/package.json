@@ -8,6 +8,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "element-plus": "^2.7.6",
     "vue": "^3.4.27",
     "vue-router": "^4.3.2",
     "pinia": "^2.1.7"

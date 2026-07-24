@@ -12,7 +12,7 @@ export default defineConfig({
         './DictRemoteApp': './src/exposed/DictRemoteApp.vue',
         './routes': './src/exposed/routes.ts'
       },
-      shared: ['vue', 'vue-router', 'pinia']
+      shared: ['vue', 'vue-router', 'pinia', 'element-plus']
     })
   ],
   build: {
@@ -20,6 +20,12 @@ export default defineConfig({
   },
   server: {
     port: 4175,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:8080',
+      '/open': 'http://127.0.0.1:8080',
+      '/plugins': 'http://127.0.0.1:8080',
+      '/plugin-static': 'http://127.0.0.1:8080'
+    }
   }
 })

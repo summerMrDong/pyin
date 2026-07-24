@@ -8,7 +8,8 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
-public final class PluginGatewayErrorResponseSupport {
+public final class
+PluginGatewayErrorResponseSupport {
 
     private PluginGatewayErrorResponseSupport() {
     }

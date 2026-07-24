@@ -1,6 +1,8 @@
 import { httpRequest } from './http'
 import { unwrapResult } from './result'
 
+const SYSTEM_ADMIN_API = '/plugins/system/admin'
+
 function buildQuery(params = {}) {
   const search = new URLSearchParams()
 
@@ -15,12 +17,12 @@ function buildQuery(params = {}) {
 }
 
 export async function fetchClientCredentials(params = {}) {
-  const result = await httpRequest(`/api/core/client-credentials${buildQuery(params)}`)
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/client-credentials${buildQuery(params)}`)
   return unwrapResult(result, '加载接入凭证失败')
 }
 
 export async function createClientCredential(payload) {
-  const result = await httpRequest('/api/core/client-credentials', {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/client-credentials`, {
     method: 'POST',
     body: payload
   })
@@ -28,27 +30,27 @@ export async function createClientCredential(payload) {
 }
 
 export async function enableClientCredential(id) {
-  const result = await httpRequest(`/api/core/client-credentials/${id}/enable`, {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/client-credentials/${id}/enable`, {
     method: 'POST'
   })
   return unwrapResult(result, '启用接入凭证失败')
 }
 
 export async function disableClientCredential(id) {
-  const result = await httpRequest(`/api/core/client-credentials/${id}/disable`, {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/client-credentials/${id}/disable`, {
     method: 'POST'
   })
   return unwrapResult(result, '停用接入凭证失败')
 }
 
 export async function rotateClientCredentialSecret(id) {
-  const result = await httpRequest(`/api/core/client-credentials/${id}/rotate-secret`, {
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/client-credentials/${id}/rotate-secret`, {
     method: 'POST'
   })
   return unwrapResult(result, '轮换密钥失败')
 }
 
 export async function fetchClientCredentialRequestLogs(id, params = {}) {
-  const result = await httpRequest(`/api/core/client-credentials/${id}/request-logs${buildQuery(params)}`)
+  const result = await httpRequest(`${SYSTEM_ADMIN_API}/client-credentials/${id}/request-logs${buildQuery(params)}`)
   return unwrapResult(result, '加载请求日志失败')
 }

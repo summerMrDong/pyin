@@ -1,0 +1,64 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.pyin</groupId>
+        <artifactId>pyin-plugin-export-workshop</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>pyin-plugin-export-workshop-backend</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.pyin</groupId>
+            <artifactId>pyin-plugin-spi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.pyin</groupId>
+            <artifactId>pyin-plugin-sdk-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.pyin</groupId>
+            <artifactId>pyin-plugin-sdk-embedded</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.pyin</groupId>
+            <artifactId>pyin-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution><id>npm-ci</id><phase>generate-resources</phase><goals><goal>exec</goal></goals><configuration><workingDirectory>${project.basedir}/../frontend</workingDirectory><executable>npm</executable><arguments><argument>ci</argument></arguments></configuration></execution>
+                    <execution><id>npm-build</id><phase>generate-resources</phase><goals><goal>exec</goal></goals><configuration><workingDirectory>${project.basedir}/../frontend</workingDirectory><executable>npm</executable><arguments><argument>run</argument><argument>build</argument></arguments></configuration></execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions><execution><id>copy-frontend-to-resources</id><phase>generate-resources</phase><goals><goal>run</goal></goals><configuration><target>
+                    <mkdir dir="${project.basedir}/src/main/resources/plugin-static/export-workshop" />
+                    <delete includeemptydirs="true"><fileset dir="${project.basedir}/src/main/resources/plugin-static/export-workshop" excludes=".gitkeep" /></delete>
+                    <copy todir="${project.basedir}/src/main/resources/plugin-static/export-workshop" overwrite="true"><fileset dir="${project.basedir}/../frontend/dist" /></copy>
+                </target></configuration></execution></executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -14,8 +14,6 @@
 
     <modules>
         <module>pyin-bootstrap</module>
-        <module>pyin-auth-api</module>
-        <module>pyin-auth</module>
         <module>pyin-common</module>
         <module>pyin-platform</module>
         <module>pyin-runtime</module>

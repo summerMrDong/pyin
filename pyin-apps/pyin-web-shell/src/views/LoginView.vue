@@ -96,9 +96,11 @@ async function handleSubmit() {
     submitting.value = true
     errorMessage.value = ''
     await authStore.login(form)
-    await navigationStore.refresh(router)
+    await navigationStore.initialize(router)
     ElMessage.success('登录成功')
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    const redirect = typeof route.query.redirect === 'string'
+      ? route.query.redirect
+      : navigationStore.modules[0]?.defaultPath ?? '/'
     await router.replace(redirect)
   } catch (error) {
     errorMessage.value = error?.payload?.message ?? error?.message ?? '登录失败，请稍后重试'

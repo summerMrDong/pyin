@@ -17,9 +17,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://127.0.0.1:8080',
-      '/capi': 'http://127.0.0.1:8080',
-      '/plugin-static': 'http://127.0.0.1:8080'
+      '/api': 'http://127.0.0.1:8081',
+      '/open': 'http://127.0.0.1:8081',
+      '^/plugins/[^/]+/(admin|open)(?:/.*)?$': 'http://127.0.0.1:8081',
+      '/plugin-static': 'http://127.0.0.1:8081'
     }
   }
 })

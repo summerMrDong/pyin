@@ -23,25 +23,26 @@ public @interface Permission {
 
 这些字段会自动从 Spring MVC 注解（`@GetMapping`、`@PostMapping` 等）中解析，无需重复声明。
 
-### 3. 自动过滤固定路由前缀
+### 3. 自动处理固定路由前缀
 
-扫描器会自动移除以下固定前缀：
-- **Admin 控制器**：移除 `/admin` 前缀
-- **Client 控制器**：移除 `/client` 前缀
+插件控制器通过 `@AdminMapping` 或 `@OpenMapping` 标记通道，运行时会自动为 Spring MVC
+注册规范固定前缀：
+- **Admin 控制器**：固定前缀为 `/plugins/{pluginId}/admin`
+- **Open 控制器**：固定前缀为 `/plugins/{pluginId}/open`
 
-这些前缀是网关层面的路由规则，不应该出现在插件 API 定义中。
+插件 API 定义中只保留插件内相对业务路径，不包含网关固定前缀。
 
 **示例：**
 ```java
 // Admin 控制器
-@RequestMapping("/admin")
+@AdminMapping("/dict")
 @GetMapping("/types")
-// 扫描结果：path = "/types" (自动移除 /admin)
+// 扫描结果：path = "/dict/types"
 
-// Client 控制器
-@RequestMapping("/client")
+// Open 控制器
+@OpenMapping("/dict")
 @GetMapping("/dict/label")
-// 扫描结果：path = "/dict/label" (自动移除 /client)
+// 扫描结果：path = "/dict/label"
 ```
 
 ### 4. 扫描器增强
@@ -49,7 +50,7 @@ public @interface Permission {
 `PluginApiScanner` 现在会：
 - 自动从 Spring MVC 注解中解析 HTTP 方法（GET、POST、PUT、DELETE、PATCH）
 - 自动从 Spring MVC 注解中解析路径
-- 自动移除固定的 `/admin` 或 `/client` 前缀
+- 自动按 `@AdminMapping` / `@OpenMapping` 识别接口通道
 - 验证方法必须包含有效的 Spring MVC 映射注解
 
 ## 迁移示例
@@ -86,8 +87,8 @@ public Result<List<Map<String, Object>>> listTypes() {
 **旧写法：**
 
 ```java
-@ClientSdkApi(path = "/client/dict/label", method = "GET")
-@GetMapping("/client/dict/label")
+@ClientSdkApi(path = "/dict/label", method = "GET")
+@GetMapping("/dict/label")
 public Result<Map<String, String>> label() {
     return Result.ok(Map.of("label", "演示标签"));
 }
@@ -97,7 +98,7 @@ public Result<Map<String, String>> label() {
 
 ```java
 @ClientSdkApi
-@GetMapping("/client/dict/label")
+@GetMapping("/dict/label")
 public Result<Map<String, String>> label() {
     return Result.ok(Map.of("label", "演示标签"));
 }
@@ -139,25 +140,25 @@ public Result<?> sync() {
 2. **路径以 Spring 注解为准**：扫描器会从 Spring 注解中提取实际的路径
 3. **HTTP 方法以 Spring 注解为准**：扫描器会根据使用的注解类型推断 HTTP 方法
 4. **控制器路径规范**：
-   - **Admin 控制器**：使用 `@RequestMapping("/admin")` 作为类级别前缀
-   - **Client 控制器**：使用 `@RequestMapping("/client")` 作为类级别前缀
-   - 扫描器会自动移除这些固定前缀，生成干净的 API 路径
-5. **向后兼容**：如果需要，可以保留旧的 path/method 字段作为备选（当前实现已完全移除）
+   - **Admin 控制器**：使用 `@AdminMapping`，外部统一走 `/plugins/{pluginId}/admin/**`
+   - **Open 控制器**：使用 `@OpenMapping`，外部统一走 `/plugins/{pluginId}/open/**`
+   - 类级和方法级路径只表达插件业务路径，不再额外写 `/admin`、`/open` 或旧 `/client`
+5. **不兼容旧写法**：当前实现已完全移除注解中的 path/method 字段，不再兼容旧路径清单。
 
 ### 路由映射规则
 
 ```
 网关层路由：
-  /api/plugins/{pluginId}/admin/**  → 插件内部 /admin/**
-  /capi/plugins/{pluginId}/client/** → 插件内部 /client/**
+  /plugins/{pluginId}/admin/** → 插件 Spring MVC Controller
+  /plugins/{pluginId}/open/**  → 插件 Spring MVC Controller
 
-插件内部路径：
-  Admin: @RequestMapping("/admin") + @GetMapping("/types") = /admin/types
-  Client: @RequestMapping("/client") + @GetMapping("/dict/label") = /client/dict/label
+插件真实 Controller 路径：
+  Admin: @AdminMapping("/dict") + @GetMapping("/types") = /plugins/{pluginId}/admin/dict/types
+  Open: @OpenMapping("/dict") + @GetMapping("/label") = /plugins/{pluginId}/open/dict/label
 
 扫描器生成的 API 定义（去除固定前缀）：
-  Admin API: path = "/types"
-  Client API: path = "/dict/label"
+  Admin API: path = "/dict/types"
+  Open API: path = "/dict/label"
 ```
 
 ## 批量迁移建议

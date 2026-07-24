@@ -1,5 +1,8 @@
 package com.pyin.plugin.sdk.resource;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,44 +11,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.StringUtils;
 
 @ConfigurationProperties(prefix = "pyin.plugin.resources")
+@Getter
+@Setter
 public class PluginResourceProperties {
 
     private List<String> locations = new ArrayList<>(List.of("classpath:/plugin-static/{pluginId}/"));
     private String remoteEntryFile = "remoteEntry.js";
     private String assetsDir = "assets/";
     private Map<String, PluginResourceOverride> plugins = new LinkedHashMap<>();
-
-    public List<String> getLocations() {
-        return locations;
-    }
-
-    public void setLocations(List<String> locations) {
-        this.locations = locations;
-    }
-
-    public String getRemoteEntryFile() {
-        return remoteEntryFile;
-    }
-
-    public void setRemoteEntryFile(String remoteEntryFile) {
-        this.remoteEntryFile = remoteEntryFile;
-    }
-
-    public String getAssetsDir() {
-        return assetsDir;
-    }
-
-    public void setAssetsDir(String assetsDir) {
-        this.assetsDir = assetsDir;
-    }
-
-    public Map<String, PluginResourceOverride> getPlugins() {
-        return plugins;
-    }
-
-    public void setPlugins(Map<String, PluginResourceOverride> plugins) {
-        this.plugins = plugins;
-    }
 
     public List<String> getEffectiveLocations(String pluginId) {
         PluginResourceOverride override = plugins.get(pluginId);
@@ -72,33 +45,11 @@ public class PluginResourceProperties {
         return StringUtils.hasText(value) ? value : fallback;
     }
 
+    @Getter
+    @Setter
     public static class PluginResourceOverride {
         private List<String> locations = new ArrayList<>();
         private String remoteEntryFile;
         private String assetsDir;
-
-        public List<String> getLocations() {
-            return locations;
-        }
-
-        public void setLocations(List<String> locations) {
-            this.locations = locations;
-        }
-
-        public String getRemoteEntryFile() {
-            return remoteEntryFile;
-        }
-
-        public void setRemoteEntryFile(String remoteEntryFile) {
-            this.remoteEntryFile = remoteEntryFile;
-        }
-
-        public String getAssetsDir() {
-            return assetsDir;
-        }
-
-        public void setAssetsDir(String assetsDir) {
-            this.assetsDir = assetsDir;
-        }
     }
 }

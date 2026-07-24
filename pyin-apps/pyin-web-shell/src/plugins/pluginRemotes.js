@@ -7,25 +7,15 @@ import {
 const remoteRegistrationState = new Map()
 
 function buildRemoteConfig(remoteEntry) {
-  return {
-    url: remoteEntry,
-    format: 'esm',
-    from: 'vite'
-  }
+  return { url: remoteEntry, format: 'esm', from: 'vite' }
 }
 
 async function ensureRemoteRegistered(remoteName, remoteEntry) {
-  if (!remoteName || !remoteEntry) {
-    return false
-  }
+  if (!remoteName || !remoteEntry) return false
 
   const existing = remoteRegistrationState.get(remoteName)
-  if (existing === 'ready') {
-    return true
-  }
-  if (existing instanceof Promise) {
-    return existing
-  }
+  if (existing === 'ready') return true
+  if (existing instanceof Promise) return existing
 
   const registration = Promise.resolve().then(() => {
     setRemote(remoteName, buildRemoteConfig(remoteEntry))
@@ -40,77 +30,25 @@ async function ensureRemoteRegistered(remoteName, remoteEntry) {
   return registration
 }
 
-async function loadRemoteModule(remoteName, exposedModule) {
-  const remoteModule = await getRemote(remoteName, exposedModule)
-  return unwrapDefault(remoteModule)
-}
-
-function buildComponentRoute(plugin, component) {
-  if (!component) {
-    return []
-  }
-  const menus = flattenRouteMenus(plugin.menus ?? [])
-  if (menus.length === 0) {
-    return []
-  }
-  return menus.map((menu) => ({
-    path: menu.path,
-    component,
-    props: { page: menu.page ?? null }
-  }))
-}
-
-function flattenRouteMenus(menus) {
-  return menus.flatMap((menu) => {
-    if (menu.type === 'DIRECTORY') {
-      return flattenRouteMenus(menu.children ?? [])
-    }
-    if (menu.type === 'ROUTE' && menu.path) {
-      return [menu]
-    }
-    return []
-  })
-}
-
+/**
+ * 加载插件自行声明的路由。`./routes` 是所有插件必须暴露的联邦入口，Shell 不推导或补充页面路由。
+ */
 export async function loadRemoteRoutes(plugin) {
   const frontend = plugin?.frontend
-  if (!frontend) {
-    return []
+  if (!plugin?.pluginId || !frontend?.remoteEntry) {
+    return { routes: [], failed: false }
   }
-
-  const remoteName = frontend.remoteName
-  const remoteEntry = frontend.remoteEntry
-  const exposedModules = frontend.exposedModules ?? []
-
-  if (!remoteName || !remoteEntry) {
-    return []
-  }
-
-  await ensureRemoteRegistered(remoteName, remoteEntry)
 
   try {
-    const routesModule = await loadRemoteModule(remoteName, './routes')
-    const routes = Array.isArray(routesModule) ? routesModule
-      : Array.isArray(routesModule?.default) ? routesModule.default
-      : []
-    if (routes.length > 0) {
-      return routes
-    }
+    await ensureRemoteRegistered(plugin.pluginId, frontend.remoteEntry)
+    const remoteModule = await getRemote(plugin.pluginId, './routes')
+    const routesModule = unwrapDefault(remoteModule)
+    const routes = Array.isArray(routesModule)
+      ? routesModule
+      : Array.isArray(routesModule?.default) ? routesModule.default : []
+    return { routes, failed: routes.length === 0 }
   } catch (error) {
-    console.warn(`[pyin-web-shell] failed to load remote routes for ${plugin.pluginId}`, error)
+    console.warn(`[pyin-web-shell] failed to load routes for ${plugin.pluginId}`, error)
+    return { routes: [], failed: true }
   }
-
-  for (const mod of exposedModules) {
-    try {
-      const component = await loadRemoteModule(remoteName, mod)
-      const routes = buildComponentRoute(plugin, component)
-      if (routes.length > 0) {
-        return routes
-      }
-    } catch (error) {
-      console.warn(`[pyin-web-shell] failed to load remote module ${mod} for ${plugin.pluginId}`, error)
-    }
-  }
-
-  return []
 }

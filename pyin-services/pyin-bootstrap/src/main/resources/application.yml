@@ -1,7 +1,5 @@
 server:
   port: 8081
-  servlet:
-    context-path: /plugins
 spring:
   application:
     name: pyin-config-center
@@ -53,3 +51,4 @@ pyin:
       bundled-plugins-dir: pyin-distribution-parent/bundled-plugins
       system-plugins-dir: pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/system
       external-plugins-dir: pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/external
+      embedded-plugin-ids: [system, config, dict, export-workshop]

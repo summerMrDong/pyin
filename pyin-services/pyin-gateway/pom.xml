@@ -33,7 +33,7 @@
         </dependency>
         <dependency>
             <groupId>com.pyin</groupId>
-            <artifactId>pyin-plugin-runtime</artifactId>
+            <artifactId>pyin-runtime</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

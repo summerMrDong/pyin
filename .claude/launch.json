@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "config-plugin-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "pyin-plugins/pyin-plugin-config/frontend", "run", "dev"],
+      "port": 4174
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * 字典客户端控制器，对外提供 C 端 API。
  */
-@OpenMapping
+@OpenMapping("/dict")
 public class DictClientController {
 
     @GetMapping("/label")

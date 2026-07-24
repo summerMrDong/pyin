@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.pyin.plugin.sdk.resource.DefaultPluginResourceResolver;
 import com.pyin.plugin.sdk.resource.PluginResourceProperties;
+import com.pyin.plugin.spi.PyinPlugin;
+import com.pyin.plugin.spi.model.PluginManifest;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +20,7 @@ class StandalonePluginStaticControllerTest {
     @Test
     void shouldServeRemoteEntryFromAssetsPath() throws Exception {
         StandalonePluginStaticController controller = new StandalonePluginStaticController(
-                properties(),
+                plugin(), properties(),
                 new DefaultPluginResourceResolver(resourceProperties()),
                 resourceProperties()
         );
@@ -32,7 +34,7 @@ class StandalonePluginStaticControllerTest {
     @Test
     void shouldServeAssetFromAssetsDirectory() throws Exception {
         StandalonePluginStaticController controller = new StandalonePluginStaticController(
-                properties(),
+                plugin(), properties(),
                 new DefaultPluginResourceResolver(resourceProperties()),
                 resourceProperties()
         );
@@ -46,7 +48,7 @@ class StandalonePluginStaticControllerTest {
     @Test
     void shouldRejectUnexpectedPluginId() throws Exception {
         StandalonePluginStaticController controller = new StandalonePluginStaticController(
-                properties(),
+                plugin(), properties(),
                 new DefaultPluginResourceResolver(resourceProperties()),
                 resourceProperties()
         );
@@ -71,7 +73,7 @@ class StandalonePluginStaticControllerTest {
                 "classpath:/plugin-static/{pluginId}/"
         ));
         StandalonePluginStaticController controller = new StandalonePluginStaticController(
-                properties(),
+                plugin(), properties(),
                 new DefaultPluginResourceResolver(resourceProperties),
                 resourceProperties
         );
@@ -82,8 +84,14 @@ class StandalonePluginStaticControllerTest {
 
     private StandalonePluginProperties properties() {
         StandalonePluginProperties properties = new StandalonePluginProperties();
-        properties.setPluginId("file");
         return properties;
+    }
+
+    private PyinPlugin plugin() {
+        return () -> PluginManifest.builder("file")
+                .pluginName("file")
+                .pluginVersion("1.0.0")
+                .build();
     }
 
     private PluginResourceProperties resourceProperties() {

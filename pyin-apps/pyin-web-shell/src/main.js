@@ -16,7 +16,9 @@ const navigationStore = useShellNavigationStore(pinia)
 
 themeStore.initialize()
 await authStore.initialize()
-await navigationStore.initialize(router)
+if (authStore.isAuthenticated) {
+  await navigationStore.initialize(router)
+}
 
 router.beforeEach(async (to) => {
   if (authStore.initializing) {
@@ -34,6 +36,17 @@ router.beforeEach(async (to) => {
     return {
       path: '/login',
       query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : undefined
+    }
+  }
+
+  if (to.path === '/' && navigationStore.modules[0]) {
+    return navigationStore.modules[0].defaultPath
+  }
+
+  if (to.matched.length === 0) {
+    await navigationStore.ensureRouteForPath(to.path, router)
+    if (router.resolve(to.fullPath).matched.length > 0) {
+      return to.fullPath
     }
   }
 

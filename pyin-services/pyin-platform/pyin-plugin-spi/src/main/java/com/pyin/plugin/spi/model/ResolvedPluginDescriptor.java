@@ -10,14 +10,9 @@ public class ResolvedPluginDescriptor {
 
     private String pluginId;
     private String pluginName;
-    private PluginType pluginType = PluginType.EXTERNAL;
-    private PluginRuntimeMode runtimeMode = PluginRuntimeMode.EMBEDDED;
     private String pluginVersion;
     private String basePath;
     private String entryJs;
-    private String remoteName;
-    private List<String> exposedModules = new ArrayList<>();
-    private List<PluginMenu> menus = new ArrayList<>();
     private List<PluginPermission> permissions = new ArrayList<>();
     private List<PluginApiDefinition> apis = new ArrayList<>();
     private List<PluginResourceDefinition> resources = new ArrayList<>();
@@ -36,22 +31,6 @@ public class ResolvedPluginDescriptor {
 
     public void setPluginName(String pluginName) {
         this.pluginName = pluginName;
-    }
-
-    public PluginType getPluginType() {
-        return pluginType;
-    }
-
-    public void setPluginType(PluginType pluginType) {
-        this.pluginType = pluginType;
-    }
-
-    public PluginRuntimeMode getRuntimeMode() {
-        return runtimeMode;
-    }
-
-    public void setRuntimeMode(PluginRuntimeMode runtimeMode) {
-        this.runtimeMode = runtimeMode;
     }
 
     public String getPluginVersion() {
@@ -76,30 +55,6 @@ public class ResolvedPluginDescriptor {
 
     public void setEntryJs(String entryJs) {
         this.entryJs = entryJs;
-    }
-
-    public String getRemoteName() {
-        return remoteName;
-    }
-
-    public void setRemoteName(String remoteName) {
-        this.remoteName = remoteName;
-    }
-
-    public List<String> getExposedModules() {
-        return exposedModules;
-    }
-
-    public void setExposedModules(List<String> exposedModules) {
-        this.exposedModules = exposedModules;
-    }
-
-    public List<PluginMenu> getMenus() {
-        return menus;
-    }
-
-    public void setMenus(List<PluginMenu> menus) {
-        this.menus = menus;
     }
 
     public List<PluginPermission> getPermissions() {

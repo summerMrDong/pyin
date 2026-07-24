@@ -25,26 +25,27 @@ class PluginApiScannerTest {
     void shouldScanAdminAndOpenControllersWithPluginPrefixes() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(TestConfiguration.class)) {
             PluginApiScanner scanner = new PluginApiScanner();
-            PluginScanResult result = scanner.scan(context, context.getBean(TestPlugin.class));
+            TestPlugin plugin = context.getBean(TestPlugin.class);
+            PluginScanResult result = scanner.scan(context, plugin, plugin.manifest());
 
             assertThat(result.apis()).hasSize(4);
             assertThat(result.apis())
                     .anySatisfy(api -> {
                         assertThat(api.path()).isEqualTo("/types");
-                        assertThat(api.internalPath()).isEqualTo("/test/admin/types");
+                        assertThat(api.internalPath()).isEqualTo("/plugins/test/admin/types");
                         assertThat(api.method()).isEqualTo("GET");
                         assertThat(api.accessMode()).isEqualTo(PluginAccessMode.CENTER_ADMIN_ONLY);
                         assertThat(api.permissionCode()).isEqualTo("test:view");
                     })
                     .anySatisfy(api -> {
                         assertThat(api.path()).isEqualTo("/types/{id}");
-                        assertThat(api.internalPath()).isEqualTo("/test/admin/types/{id}");
+                        assertThat(api.internalPath()).isEqualTo("/plugins/test/admin/types/{id}");
                         assertThat(api.method()).isEqualTo("DELETE");
                         assertThat(api.permissionCode()).isEqualTo("test:admin:types:id:delete");
                     })
                     .anySatisfy(api -> {
                         assertThat(api.path()).isEqualTo("/batch");
-                        assertThat(api.internalPath()).isEqualTo("/test/open/batch");
+                        assertThat(api.internalPath()).isEqualTo("/plugins/test/open/batch");
                         assertThat(api.method()).isEqualTo("POST");
                         assertThat(api.accessMode()).isEqualTo(PluginAccessMode.CLIENT_SDK_GATEWAY);
                         assertThat(api.permissionCode()).isEqualTo("test:open:batch:post");
@@ -83,19 +84,10 @@ class PluginApiScannerTest {
     static class TestPlugin implements PyinPlugin {
 
         @Override
-        public String pluginId() {
-            return "test";
-        }
-
-        @Override
         public PluginManifest manifest() {
-            return PluginManifest.builder().pluginId("test").pluginName("test").build();
+            return PluginManifest.builder("test").pluginName("test").build();
         }
 
-        @Override
-        public List<com.pyin.plugin.spi.model.PluginMenu> menus() {
-            return List.of();
-        }
     }
 
     @AdminMapping
