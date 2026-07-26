@@ -1,6 +1,16 @@
-<template><footer class="status"><span>导出工坊</span><span v-if="template">{{ template.name }} · Sheet1</span><span class="spacer"></span><span>{{ message || '就绪' }}</span><button @click="$emit('theme')">{{ dark ? '☀ 浅色' : '◐ 深色' }}</button></footer></template>
+<template>
+  <footer class="status">
+    <span class="status-dot"></span>
+    <span>{{ message || '就绪' }}</span>
+    <span class="spacer"></span>
+    <span v-if="template">{{ template.name }} · Sheet1</span>
+    <span>{{ mappingCount }} 个映射</span>
+    <span v-if="changedCount">{{ changedCount }} 个已填充单元格</span>
+  </footer>
+</template>
 <script setup lang="ts">
-defineProps<{ template?: any; message?: string; dark: boolean }>()
-defineEmits(['theme'])
+defineProps<{ template?: any; message?: string; mappingCount: number; changedCount: number }>()
 </script>
-<style scoped>.status{display:flex;gap:14px;align-items:center;background:var(--status);color:var(--status-text);padding:4px 9px;font:12px var(--font)}.spacer{flex:1}.status button{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit}</style>
+<style scoped>
+.status{display:flex;align-items:center;gap:10px;padding:4px 9px;border-top:1px solid var(--divider);background:var(--surface-raised);color:var(--muted);font:11px var(--font)}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}.spacer{flex:1}
+</style>

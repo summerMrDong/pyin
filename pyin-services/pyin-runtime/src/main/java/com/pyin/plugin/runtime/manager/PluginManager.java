@@ -12,9 +12,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.ansi.AnsiColor;
+import org.springframework.boot.ansi.AnsiOutput;
+import org.springframework.boot.ansi.AnsiStyle;
 import org.springframework.context.ApplicationContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -25,6 +27,8 @@ import org.springframework.stereotype.Service;
 public class PluginManager {
 
     private static final Logger log = LoggerFactory.getLogger(PluginManager.class);
+    private static final int TABLE_INNER_WIDTH = 86;
+    private static final String HORIZONTAL_BORDER = "─".repeat(TABLE_INNER_WIDTH);
 
     private final PluginRuntimeProperties properties;
     private final PluginRegistry pluginRegistry;
@@ -97,36 +101,99 @@ public class PluginManager {
         List<RegisteredPlugin> plugins = pluginRegistry.all().stream()
                 .sorted(Comparator.comparing(RegisteredPlugin::pluginId))
                 .toList();
+        log.info("{}", buildLoadedPluginsSummary(plugins));
+    }
+
+    static String buildLoadedPluginsSummary(List<RegisteredPlugin> plugins) {
         StringBuilder summary = new StringBuilder();
         summary.append(System.lineSeparator())
-                .append("╔════════════════════ Pyin 已加载插件（").append(plugins.size()).append("）════════════════════╗")
+                .append(color("┌──────────────────── Pyin 已加载插件 (" + plugins.size() + ")",
+                        AnsiStyle.BOLD, AnsiColor.CYAN))
                 .append(System.lineSeparator())
-                .append("║ ID                    名称              版本       来源              状态       ║")
+                .append(color(row(
+                        " " + fit("ID", 21)
+                                + " " + fit("名称", 16)
+                                + " " + fit("版本", 10)
+                                + " " + fit("来源", 17)
+                                + " " + fit("状态", 10)
+                ), AnsiStyle.BOLD, AnsiColor.YELLOW))
                 .append(System.lineSeparator())
-                .append("╠══════════════════════════════════════════════════════════════════════════════╣");
+                .append(color("├" + HORIZONTAL_BORDER, AnsiColor.CYAN));
         for (RegisteredPlugin plugin : plugins) {
-            summary.append(System.lineSeparator()).append(String.format(
-                    Locale.ROOT,
-                    "║ %-21s %-16s %-10s %-17s %-10s ║",
-                    plugin.pluginId(),
-                    plugin.descriptor().getPluginName(),
-                    plugin.descriptor().getPluginVersion(),
-                    plugin.sourceType(),
-                    plugin.status()
+            summary.append(System.lineSeparator()).append(color(row(
+                    " " + fit(plugin.pluginId(), 21)
+                            + " " + fit(plugin.descriptor().getPluginName(), 16)
+                            + " " + fit(plugin.descriptor().getPluginVersion(), 10)
+                            + " " + fit(String.valueOf(plugin.sourceType()), 17)
+                            + " " + fit(String.valueOf(plugin.status()), 10)
+            ), AnsiColor.GREEN));
+            summary.append(System.lineSeparator()).append(color(
+                    row("   后端入口：" + value(plugin.descriptor().getBasePath())),
+                    AnsiColor.BLUE
             ));
-            summary.append(System.lineSeparator()).append(String.format(
-                    Locale.ROOT,
-                    "║   后端入口：%-66s ║",
-                    plugin.descriptor().getBasePath()
-            ));
-            summary.append(System.lineSeparator()).append(String.format(
-                    Locale.ROOT,
-                    "║   前端入口：%-66s ║",
-                    plugin.descriptor().getEntryJs()
+            summary.append(System.lineSeparator()).append(color(
+                    row("   前端入口：" + value(plugin.descriptor().getEntryJs())),
+                    AnsiColor.BLUE
             ));
         }
         summary.append(System.lineSeparator())
-                .append("╚══════════════════════════════════════════════════════════════════════════════╝");
-        log.info("{}", summary);
+                .append(color("└" + HORIZONTAL_BORDER, AnsiColor.CYAN));
+        return summary.toString();
+    }
+
+    private static String row(String content) {
+        return "│" + content.stripTrailing();
+    }
+
+    private static String fit(String value, int width) {
+        String text = value(value);
+        int textWidth = displayWidth(text);
+        if (textWidth <= width) {
+            return text + " ".repeat(width - textWidth);
+        }
+
+        int targetWidth = Math.max(0, width - 3);
+        StringBuilder truncated = new StringBuilder();
+        int currentWidth = 0;
+        for (int offset = 0; offset < text.length();) {
+            int codePoint = text.codePointAt(offset);
+            int codePointWidth = displayWidth(codePoint);
+            if (currentWidth + codePointWidth > targetWidth) {
+                break;
+            }
+            truncated.appendCodePoint(codePoint);
+            currentWidth += codePointWidth;
+            offset += Character.charCount(codePoint);
+        }
+        return truncated + "..." + " ".repeat(Math.max(0, width - currentWidth - 3));
+    }
+
+    static int displayWidth(String value) {
+        return value.codePoints().map(PluginManager::displayWidth).sum();
+    }
+
+    private static int displayWidth(int codePoint) {
+        Character.UnicodeBlock block = Character.UnicodeBlock.of(codePoint);
+        return block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
+                || block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
+                || block == Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS
+                || block == Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION
+                || block == Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS
+                || block == Character.UnicodeBlock.HANGUL_SYLLABLES
+                || block == Character.UnicodeBlock.HIRAGANA
+                || block == Character.UnicodeBlock.KATAKANA ? 2 : 1;
+    }
+
+    private static String value(Object value) {
+        return value == null ? "-" : value.toString();
+    }
+
+    private static String color(String value, Object... colors) {
+        Object[] elements = new Object[colors.length + 3];
+        System.arraycopy(colors, 0, elements, 0, colors.length);
+        elements[colors.length] = value;
+        elements[colors.length + 1] = AnsiStyle.NORMAL;
+        elements[colors.length + 2] = AnsiColor.DEFAULT;
+        return AnsiOutput.toString(elements);
     }
 }

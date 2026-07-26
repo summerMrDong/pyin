@@ -9,7 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Component
 public class CoreSchemaInitializer {
 
-    public static final String DEFAULT_ADMIN_PASSWORD = "Admin@123456";
+    public static final String DEFAULT_ADMIN_PASSWORD = "123456";
+    private static final String LEGACY_DEFAULT_ADMIN_PASSWORD = "Admin@123456";
 
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
@@ -189,6 +190,7 @@ public class CoreSchemaInitializer {
                 "SELECT COUNT(*) FROM pyin_user WHERE id = 1 AND (password_hash IS NULL OR password_hash = '')",
                 "UPDATE pyin_user SET password_hash = '%s' WHERE id = 1".formatted(adminPasswordHash)
         );
+        migrateLegacyDefaultAdminPassword(adminPasswordHash);
         updateWhenMissing(
                 "SELECT COUNT(*) FROM pyin_user WHERE id = 1 AND (status IS NULL OR status = '')",
                 "UPDATE pyin_user SET status = '%s' WHERE id = 1".formatted(UserService.STATUS_ENABLED)
@@ -249,6 +251,20 @@ public class CoreSchemaInitializer {
         seedRolePermission(3013, 1L, "credential:update");
         seedRolePermission(3014, 1L, "credential:rotate-secret");
         seedRolePermission(3015, 1L, "credential:view-logs");
+    }
+
+    private void migrateLegacyDefaultAdminPassword(String adminPasswordHash) {
+        String currentPasswordHash = jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM pyin_user WHERE id = 1",
+                String.class
+        );
+        if (currentPasswordHash != null
+                && passwordEncoder.matches(LEGACY_DEFAULT_ADMIN_PASSWORD, currentPasswordHash)) {
+            jdbcTemplate.update(
+                    "UPDATE pyin_user SET password_hash = ?, updated_at = current_timestamp WHERE id = 1",
+                    adminPasswordHash
+            );
+        }
     }
 
     private void seedPermission(long id, String code, String name) {

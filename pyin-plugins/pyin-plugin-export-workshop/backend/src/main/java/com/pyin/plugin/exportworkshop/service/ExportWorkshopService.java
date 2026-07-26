@@ -26,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ExportWorkshopService {
 
     private static final List<String> SUPPORTED_EXTENSIONS = List.of("xlsx", "json");
+    private static final Pattern TEMPLATE_VARIABLE = Pattern.compile("\\{\\{?\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*\\}?\\}");
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ExportWorkshopProperties properties;
@@ -224,16 +227,77 @@ public class ExportWorkshopService {
     }
 
     public Map<String, Object> debug(WorkshopRequests.DebugRequest request) {
-        List<Map<String, Object>> changes = new ArrayList<>();
         JsonNode mock = objectMapper.valueToTree(request.mockData());
+        Map<String, Map<String, Object>> changes = new LinkedHashMap<>();
+        collectTemplateVariableChanges(request.workbookSnapshot(), mock, changes);
         for (Map<String, Object> mapping : request.mappings() == null ? List.<Map<String, Object>>of() : request.mappings()) {
             String path = String.valueOf(mapping.getOrDefault("jsonPath", "")); JsonNode value = jsonPath(mock, path);
             if (value != null && !value.isMissingNode()) {
-                Map<String, Object> change = new LinkedHashMap<>(); change.put("sheetId", mapping.get("sheetId")); change.put("cellAddress", mapping.get("cellAddress")); change.put("value", value.isValueNode() ? value.asText() : value.toString()); changes.add(change);
+                String sheetId = String.valueOf(mapping.getOrDefault("sheetId", "sheet-1"));
+                String cellAddress = String.valueOf(mapping.getOrDefault("cellAddress", ""));
+                if (StringUtils.hasText(cellAddress)) putChange(changes, sheetId, cellAddress, jsonValue(value));
             }
         }
-        return Map.of("workbookSnapshot", request.workbookSnapshot(), "changedCells", changes);
+        return Map.of("workbookSnapshot", request.workbookSnapshot(), "changedCells", new ArrayList<>(changes.values()));
     }
+
+    private void collectTemplateVariableChanges(Object workbookSnapshot, JsonNode mock, Map<String, Map<String, Object>> changes) {
+        JsonNode sheets = objectMapper.valueToTree(workbookSnapshot).path("sheets");
+        sheets.fields().forEachRemaining(sheetEntry -> {
+            String sheetId = sheetEntry.getKey();
+            sheetEntry.getValue().path("cellData").fields().forEachRemaining(rowEntry -> {
+                int row = parseCellIndex(rowEntry.getKey());
+                if (row < 0) return;
+                rowEntry.getValue().fields().forEachRemaining(columnEntry -> {
+                    int column = parseCellIndex(columnEntry.getKey());
+                    JsonNode cellValue = columnEntry.getValue().path("v");
+                    if (column < 0 || !cellValue.isTextual()) return;
+                    String template = cellValue.asText();
+                    Matcher matcher = TEMPLATE_VARIABLE.matcher(template);
+                    StringBuffer rendered = new StringBuffer();
+                    boolean resolved = false;
+                    while (matcher.find()) {
+                        JsonNode value = jsonPath(mock, "$." + matcher.group(1));
+                        String replacement = matcher.group();
+                        if (value != null && !value.isMissingNode() && !value.isNull()) {
+                            replacement = jsonValue(value);
+                            resolved = true;
+                        }
+                        matcher.appendReplacement(rendered, Matcher.quoteReplacement(replacement));
+                    }
+                    matcher.appendTail(rendered);
+                    if (resolved && !template.contentEquals(rendered)) {
+                        putChange(changes, sheetId, cellAddress(row, column), rendered.toString());
+                    }
+                });
+            });
+        });
+    }
+
+    private void putChange(Map<String, Map<String, Object>> changes, String sheetId, String cellAddress, String value) {
+        Map<String, Object> change = new LinkedHashMap<>();
+        change.put("sheetId", sheetId);
+        change.put("cellAddress", cellAddress);
+        change.put("value", value);
+        changes.put(sheetId + "\u0000" + cellAddress, change);
+    }
+
+    private String cellAddress(int row, int column) {
+        StringBuilder name = new StringBuilder();
+        int value = column + 1;
+        while (value > 0) {
+            int remainder = (value - 1) % 26;
+            name.insert(0, (char) ('A' + remainder));
+            value = (value - 1) / 26;
+        }
+        return name.append(row + 1).toString();
+    }
+
+    private int parseCellIndex(String value) {
+        try { return Integer.parseInt(value); } catch (NumberFormatException exception) { return -1; }
+    }
+
+    private String jsonValue(JsonNode value) { return value.isValueNode() ? value.asText() : value.toString(); }
 
     @Transactional
     public Map<String, Object> createExport(Long templateId, WorkshopRequests.ExportCreateRequest request) {
@@ -316,7 +380,7 @@ public class ExportWorkshopService {
     private String extension(String value) { int index = value == null ? -1 : value.lastIndexOf('.'); return index < 0 ? "" : value.substring(index + 1).toLowerCase(); }
     private String stripExtension(String value) { String safe = StringUtils.hasText(value) ? value : "未命名模板"; int index = safe.lastIndexOf('.'); return index > 0 ? safe.substring(0, index) : safe; }
     private String sha256(byte[] content) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content)); } catch (Exception exception) { throw new IllegalStateException(exception); } }
-    private JsonNode jsonPath(JsonNode root, String path) { if (!StringUtils.hasText(path) || !path.startsWith("$")) return null; JsonNode current = root; for (String segment : path.substring(1).split("\\\\.")) { if (segment.isBlank()) continue; current = current == null ? null : current.path(segment); } return current; }
+    private JsonNode jsonPath(JsonNode root, String path) { if (!StringUtils.hasText(path) || !path.startsWith("$")) return null; JsonNode current = root; for (String segment : path.substring(1).split("\\.")) { if (segment.isBlank()) continue; current = current == null ? null : current.path(segment); } return current; }
     private long asLong(Object value) { return value instanceof Number number ? number.longValue() : Long.parseLong(String.valueOf(value)); }
     private BusinessException invalid(String message) { return new BusinessException(ErrorCode.INVALID_REQUEST, message); }
 }
