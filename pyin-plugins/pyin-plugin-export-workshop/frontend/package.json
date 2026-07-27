@@ -10,7 +10,12 @@
   "dependencies": {
     "@univerjs/core": "0.25.1",
     "@univerjs/design": "0.25.1",
+    "@univerjs/docs": "0.25.1",
+    "@univerjs/docs-ui": "0.25.1",
     "@univerjs/sheets": "0.25.1",
+    "@univerjs/sheets-formula-ui": "0.25.1",
+    "@univerjs/sheets-numfmt-ui": "0.25.1",
+    "@univerjs/sheets-ui": "0.25.1",
     "@univerjs/ui": "0.25.1",
     "exceljs": "4.4.0",
     "monaco-editor": "0.56.0",

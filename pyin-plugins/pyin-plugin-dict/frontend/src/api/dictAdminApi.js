@@ -4,6 +4,23 @@ export function fetchTypes() {
   return requestJson('/plugins/dict/admin/dict/types')
 }
 
+export function fetchCategories() {
+  return requestJson('/plugins/dict/admin/dict/categories')
+}
+
+export function saveCategory(payload) {
+  return requestJson('/plugins/dict/admin/dict/categories', {
+    method: 'POST',
+    body: payload
+  })
+}
+
+export function deleteCategory(id) {
+  return requestJson(`/plugins/dict/admin/dict/categories/${id}`, {
+    method: 'DELETE'
+  })
+}
+
 export function saveType(payload) {
   return requestJson('/plugins/dict/admin/dict/types', {
     method: 'POST',

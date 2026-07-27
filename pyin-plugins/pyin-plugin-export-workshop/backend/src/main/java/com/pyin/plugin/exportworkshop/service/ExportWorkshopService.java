@@ -376,7 +376,7 @@ public class ExportWorkshopService {
     private Object parse(String value) { try { return StringUtils.hasText(value) ? objectMapper.readValue(value, Object.class) : List.of(); } catch (JsonProcessingException exception) { throw invalid("工作簿数据已损坏"); } }
     @SuppressWarnings("unchecked") private List<Map<String, Object>> castMappings(Object value) { return value instanceof List<?> list ? (List<Map<String, Object>>) list : List.of(); }
     private void validateWorkbookJson(String value) { try { objectMapper.readTree(value); } catch (JsonProcessingException exception) { throw invalid("工作簿快照必须是有效 JSON"); } }
-    private String defaultWorkbook(String name) { return "{\"id\":\"workbook-" + UUID.randomUUID() + "\",\"name\":\"" + name.replace("\"", "") + "\",\"sheetOrder\":[\"sheet-1\"],\"sheets\":{\"sheet-1\":{\"id\":\"sheet-1\",\"name\":\"Sheet1\",\"cellData\":{}}},\"resources\":{}}"; }
+    private String defaultWorkbook(String name) { return "{\"id\":\"workbook-" + UUID.randomUUID() + "\",\"name\":\"" + name.replace("\"", "") + "\",\"sheetOrder\":[\"sheet-1\"],\"sheets\":{\"sheet-1\":{\"id\":\"sheet-1\",\"name\":\"Sheet1\",\"cellData\":{}}},\"resources\":[]}"; }
     private String extension(String value) { int index = value == null ? -1 : value.lastIndexOf('.'); return index < 0 ? "" : value.substring(index + 1).toLowerCase(); }
     private String stripExtension(String value) { String safe = StringUtils.hasText(value) ? value : "未命名模板"; int index = safe.lastIndexOf('.'); return index > 0 ? safe.substring(0, index) : safe; }
     private String sha256(byte[] content) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content)); } catch (Exception exception) { throw new IllegalStateException(exception); } }

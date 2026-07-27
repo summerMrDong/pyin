@@ -6,6 +6,7 @@ import com.pyin.plugin.sdk.annotation.AdminMapping;
 import com.pyin.plugin.sdk.annotation.Permission;
 import com.pyin.plugin.dict.service.DictAdminService;
 import com.pyin.plugin.dict.web.DictItemSaveRequest;
+import com.pyin.plugin.dict.web.DictCategorySaveRequest;
 import com.pyin.plugin.dict.web.DictTypeSaveRequest;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,33 @@ public class DictAdminController {
     @GetMapping("/types")
     public Result<List<Map<String, Object>>> listTypes() {
         return Result.ok(dictAdminService.listTypes());
+    }
+
+    @Permission(code = "dict:view", name = "字典查看")
+    @GetMapping("/categories")
+    public Result<List<Map<String, Object>>> listCategories() {
+        return Result.ok(dictAdminService.listCategories());
+    }
+
+    @Permission(code = "dict:update", name = "字典修改")
+    @PostMapping("/categories")
+    public Result<?> saveCategory(@RequestBody DictCategorySaveRequest request) {
+        try {
+            return Result.ok(dictAdminService.saveCategory(request));
+        } catch (BusinessException exception) {
+            return Result.fail(exception.getCode(), exception.getMessage());
+        }
+    }
+
+    @Permission(code = "dict:delete", name = "字典删除")
+    @DeleteMapping("/categories/{id}")
+    public Result<?> deleteCategory(@PathVariable Long id) {
+        try {
+            dictAdminService.deleteCategory(id);
+            return Result.ok();
+        } catch (BusinessException exception) {
+            return Result.fail(exception.getCode(), exception.getMessage());
+        }
     }
 
     @Permission(code = "dict:update", name = "字典修改")

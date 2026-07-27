@@ -1,8 +1,5 @@
 package com.pyin.plugin.config.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pyin.plugin.common.code.ErrorCode;
 import com.pyin.plugin.common.exception.BusinessException;
 import com.pyin.plugin.config.model.ConfigDirectoryMode;
@@ -36,7 +33,7 @@ import org.springframework.util.StringUtils;
 public class ConfigAdminService {
 
     private static final Pattern ITEM_KEY_PATTERN = Pattern.compile(
-            "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?::[A-Za-z0-9][A-Za-z0-9._-]{0,63})*$"
+            "^[a-z][A-Za-z0-9_-]{0,63}(?::[a-z][A-Za-z0-9_-]{0,63}){2,}$"
     );
     private static final Pattern DIRECTORY_NAME_PATTERN = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
     private static final Pattern INTEGER_PATTERN = Pattern.compile("^-?(0|[1-9]\\d*)$");
@@ -65,7 +62,9 @@ public class ConfigAdminService {
         row.put("displayName", resultSet.getString("display_name"));
         row.put("itemKey", resultSet.getString("item_key"));
         row.put("itemValue", resultSet.getString("item_value"));
+        row.put("defaultValue", resultSet.getString("default_value"));
         row.put("valueType", resultSet.getString("value_type"));
+        row.put("status", resultSet.getString("status"));
         row.put("description", resultSet.getString("description"));
         row.put("createdAt", asIsoString(resultSet, "created_at"));
         row.put("updatedAt", asIsoString(resultSet, "updated_at"));
@@ -73,11 +72,8 @@ public class ConfigAdminService {
     };
 
     private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
-
-    public ConfigAdminService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public ConfigAdminService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -102,7 +98,9 @@ public class ConfigAdminService {
                     directory_id BIGINT,
                     item_key VARCHAR(160) NOT NULL,
                     item_value VARCHAR(4000) NOT NULL,
+                    default_value VARCHAR(4000),
                     value_type VARCHAR(32) NOT NULL,
+                    status VARCHAR(16) NOT NULL DEFAULT 'ENABLED',
                     description VARCHAR(512),
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL,
@@ -127,6 +125,9 @@ public class ConfigAdminService {
                 """);
         ensureColumn("pyin_plugin_config_namespace", "directory_mode", "VARCHAR(32) NOT NULL DEFAULT 'KEY_PROJECTION'");
         ensureColumn("pyin_plugin_config_item", "directory_id", "BIGINT");
+        ensureColumn("pyin_plugin_config_item", "default_value", "VARCHAR(4000)");
+        ensureColumn("pyin_plugin_config_item", "status", "VARCHAR(16) NOT NULL DEFAULT 'ENABLED'");
+        jdbcTemplate.update("UPDATE pyin_plugin_config_item SET status = ? WHERE status IS NULL", "ENABLED");
         jdbcTemplate.update("UPDATE pyin_plugin_config_namespace SET directory_mode = ? WHERE directory_mode IS NULL", ConfigDirectoryMode.KEY_PROJECTION.name());
         ensureIndex("idx_pyin_config_directory_parent", "pyin_plugin_config_directory", "namespace_id, parent_id, sort_order");
         ensureIndex("idx_pyin_config_item_directory", "pyin_plugin_config_item", "directory_id");
@@ -192,8 +193,8 @@ public class ConfigAdminService {
             if (directoryId != null) {
                 throw invalid("directoryId 只能与 namespaceId 一起使用。");
             }
-            String where = normalizedKeyword == null ? "" : "WHERE item.item_key LIKE ? OR item.item_value LIKE ?";
-            Object[] args = normalizedKeyword == null ? new Object[0] : new Object[]{like(normalizedKeyword), like(normalizedKeyword)};
+            String where = normalizedKeyword == null ? "" : "WHERE item.item_key LIKE ? OR item.item_value LIKE ? OR item.description LIKE ?";
+            Object[] args = normalizedKeyword == null ? new Object[0] : new Object[]{like(normalizedKeyword), like(normalizedKeyword), like(normalizedKeyword)};
             return jdbcTemplate.query(itemSelect(where, "ORDER BY ns.namespace_code, ns.env, item.item_key"), ITEM_ROW_MAPPER, args);
         }
         Map<String, Object> namespace = requireNamespace(namespaceId);
@@ -209,7 +210,8 @@ public class ConfigAdminService {
             args.add(directoryId);
         }
         if (normalizedKeyword != null) {
-            where.append(" AND (item.item_key LIKE ? OR item.item_value LIKE ?)");
+            where.append(" AND (item.item_key LIKE ? OR item.item_value LIKE ? OR item.description LIKE ?)");
+            args.add(like(normalizedKeyword));
             args.add(like(normalizedKeyword));
             args.add(like(normalizedKeyword));
         }
@@ -237,6 +239,9 @@ public class ConfigAdminService {
         String itemKey = validateItemKey(request.getItemKey());
         ConfigValueType valueType = ConfigValueType.from(request.getValueType());
         String itemValue = validateValue(valueType, request.getItemValue());
+        String defaultValue = request.getDefaultValue() == null || request.getDefaultValue().isBlank()
+                ? null : validateValue(valueType, request.getDefaultValue());
+        String status = validateStatus(request.getStatus());
         String description = optionalText(request.getDescription(), 512, "description");
         if (directoryMode == ConfigDirectoryMode.KEY_PROJECTION && request.getDirectoryId() != null) {
             throw invalid("配置键投影模式不支持配置项目录归属。");
@@ -256,16 +261,16 @@ public class ConfigAdminService {
         if (request.getId() == null) {
             jdbcTemplate.update("""
                     INSERT INTO pyin_plugin_config_item
-                        (namespace_id, directory_id, item_key, item_value, value_type, description, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, request.getNamespaceId(), request.getDirectoryId(), itemKey, itemValue, valueType.name(), description, now, now);
+                        (namespace_id, directory_id, item_key, item_value, default_value, value_type, status, description, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, request.getNamespaceId(), request.getDirectoryId(), itemKey, itemValue, defaultValue, valueType.name(), status, description, now, now);
         } else {
             requireItemExists(request.getId());
             jdbcTemplate.update("""
                     UPDATE pyin_plugin_config_item
-                    SET namespace_id = ?, directory_id = ?, item_key = ?, item_value = ?, value_type = ?, description = ?, updated_at = ?
+                    SET namespace_id = ?, directory_id = ?, item_key = ?, item_value = ?, default_value = ?, value_type = ?, status = ?, description = ?, updated_at = ?
                     WHERE id = ?
-                    """, request.getNamespaceId(), request.getDirectoryId(), itemKey, itemValue, valueType.name(), description, now, request.getId());
+                    """, request.getNamespaceId(), request.getDirectoryId(), itemKey, itemValue, defaultValue, valueType.name(), status, description, now, request.getId());
         }
         return Map.of("saved", true);
     }
@@ -384,7 +389,8 @@ public class ConfigAdminService {
     private String itemSelect(String where, String orderBy) {
         return """
                 SELECT item.id, item.namespace_id, item.directory_id, ns.namespace_code, ns.env, ns.display_name,
-                       item.item_key, item.item_value, item.value_type, item.description, item.created_at, item.updated_at
+                       item.item_key, item.item_value, item.default_value, item.value_type, item.status,
+                       item.description, item.created_at, item.updated_at
                 FROM pyin_plugin_config_item item
                 JOIN pyin_plugin_config_namespace ns ON ns.id = item.namespace_id
                 """ + where + " " + orderBy;
@@ -461,7 +467,7 @@ public class ConfigAdminService {
     private String validateItemKey(String value) {
         String key = requireText(value, "itemKey", 160);
         if (!ITEM_KEY_PATTERN.matcher(key).matches()) {
-            throw invalid("配置键格式无效，只能使用冒号分隔的字母、数字、点、下划线和短横线。");
+            throw invalid("配置键必须至少包含三个以冒号分隔的段，并且每段以小写字母开头。");
         }
         return key;
     }
@@ -474,7 +480,6 @@ public class ConfigAdminService {
             case STRING -> value;
             case INTEGER -> validateInteger(value);
             case BOOLEAN -> validateBoolean(value);
-            case JSON -> validateJson(value);
         };
     }
 
@@ -497,20 +502,15 @@ public class ConfigAdminService {
         return value;
     }
 
-    private String validateJson(String value) {
-        try {
-            JsonNode node = objectMapper.readTree(value);
-            if (node == null || (!node.isObject() && !node.isArray())) {
-                throw invalid("JSON 配置值只能是对象或数组。");
-            }
-            String normalized = objectMapper.writeValueAsString(node);
-            if (normalized.length() > 4000) {
-                throw invalid("JSON 配置值超过 4000 个字符限制。");
-            }
-            return normalized;
-        } catch (JsonProcessingException exception) {
-            throw invalid("JSON 配置值格式无效。");
+    private String validateStatus(String value) {
+        if (value == null || value.isBlank()) {
+            return "ENABLED";
         }
+        String status = value.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"ENABLED".equals(status) && !"DISABLED".equals(status)) {
+            throw invalid("配置状态只能是 ENABLED 或 DISABLED。");
+        }
+        return status;
     }
 
     private void requireItemExists(Long id) {

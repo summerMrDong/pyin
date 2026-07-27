@@ -3,31 +3,31 @@
     <header class="topbar">
       <div class="title-block">
         <strong>导出工坊</strong>
-        <span>设计模板、绑定数据并预览导出结果</span>
+        <span>{{ store.active?.name || '未打开模板' }}</span>
       </div>
       <div class="top-actions">
-        <button class="secondary-button" @click="newBlank">新建模板</button>
-        <button class="secondary-button" :disabled="!store.active || busy" @click="save">保存模板</button>
-        <button class="primary-button" :disabled="!snapshot || busy" @click="runDebug">
-          {{ busy ? '处理中…' : '运行并预览' }}
+        <div class="top-split">
+          <button class="new-command" @click="newBlank">＋ 新建</button>
+          <button class="new-more" title="新建选项" @click="topNewOpen = !topNewOpen">⌄</button>
+          <div v-if="topNewOpen" class="top-menu">
+            <button @click="runTopAction(newBlank)">▦ 新建空白模板</button>
+            <button @click="runTopAction(newFolder)">▸ 新建目录</button>
+            <button @click="runTopAction(triggerImport)">⇧ 导入 XLSX / JSON</button>
+            <button @click="runTopAction(mountLocal)">▣ 挂载本地目录</button>
+            <button @click="runTopAction(mountNetwork)">↗ 挂载网络模板</button>
+          </div>
+        </div>
+        <button class="command-button" :disabled="!store.active || busy" @click="save">▣ 保存</button>
+        <button class="command-button run-command" :disabled="!snapshot || busy" @click="runDebug">
+          {{ busy ? '◌ 处理中…' : '▶ 运行预览' }}
         </button>
       </div>
     </header>
 
-    <nav class="workflow" aria-label="导出流程">
-      <div :class="{ done: !!store.active, current: !store.active }"><b>1</b><span>选择模板<small>{{ store.active?.name || '请从左侧选择' }}</small></span></div>
-      <i></i>
-      <div :class="{ done: bindingCount > 0, current: !!store.active && bindingCount === 0 }"><b>2</b><span>绑定数据<small>{{ automaticVariableCount ? `${automaticVariableCount} 个自动变量` : `${store.mappings.length} 个自定义映射` }}</small></span></div>
-      <i></i>
-      <div :class="{ done: !!previewSnapshot, current: bindingCount > 0 && !previewSnapshot }"><b>3</b><span>运行预览<small>{{ previewSnapshot ? '结果已生成' : '检查填充效果' }}</small></span></div>
-      <i></i>
-      <div :class="{ done: !!downloadUrl }"><b>4</b><span>导出 XLSX<small>{{ downloadUrl ? '文件已就绪' : '确认后下载' }}</small></span></div>
-    </nav>
-
     <TemplateTree
       :nodes="store.nodes"
       :active-id="store.active ? `template-${store.active.id}` : ''"
-      @open="store.openTemplate"
+      @open="openTemplate"
       @blank="newBlank"
       @folder="newFolder"
       @upload="upload"
@@ -35,27 +35,26 @@
       @delete="remove"
       @mount-network="mountNetwork"
       @mount-local="mountLocal"
+      @fork="fork"
     />
 
     <section class="editor-area">
-      <EditorTabs :tabs="store.tabs" :active-id="store.active?.id" @select="store.openTemplate" @close="store.closeTab" @rename="rename" />
-      <UniverWrapper :snapshot="snapshot" :changed-cells="store.changedCells" @update:snapshot="snapshot = $event" @cell-select="selectedCell = $event" />
+      <EditorTabs :tabs="store.tabs" :active-id="store.active?.id" @select="openTemplate" @close="store.closeTab" @rename="rename" />
+      <div v-if="store.loading || editorLoading" class="editor-loading" role="status"><span></span>{{ store.loading ? '正在读取模板…' : '正在加载表格编辑器…' }}</div>
+      <UniverWrapper :snapshot="snapshot" :changed-cells="store.changedCells" @update:snapshot="snapshot = $event" @create="newBlank" @import="triggerImport" />
     </section>
 
     <DebugPanel
       v-model="mockJson"
-      :mappings="store.mappings"
-      :selected-cell="selectedCell"
       :collapsed="panelCollapsed"
       :status="status"
-      :automatic-variable-count="automaticVariableCount"
       :disabled="!snapshot || busy"
       @run="runDebug"
       @export="exportFile"
       @toggle="togglePanel"
     />
 
-    <StatusBar :template="store.active" :message="status" :mapping-count="bindingCount" :changed-count="store.changedCells.length" />
+    <StatusBar :template="store.active" :message="status" :variable-count="automaticVariableCount" :changed-count="store.changedCells.length" />
     <PrintPreviewDialog
       :open="previewOpen"
       :template="store.active"
@@ -69,11 +68,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { createPinia, setActivePinia } from 'pinia'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import TemplateTree from '../components/TemplateTree.vue'
 import EditorTabs from '../components/EditorTabs.vue'
-import UniverWrapper from '../components/UniverWrapper.vue'
 import DebugPanel from '../components/DebugPanel.vue'
 import StatusBar from '../components/StatusBar.vue'
 import PrintPreviewDialog from '../components/PrintPreviewDialog.vue'
@@ -82,39 +79,69 @@ import { workshopApi } from '../api/workshop'
 import { cloneWorkbook, materializeWorkbook, templateVariables } from '../composables/workbook'
 import { exportWorkbook } from '../composables/exporter'
 
-setActivePinia(createPinia())
+const editorLoading = ref(false)
+const UniverWrapper = defineAsyncComponent({
+  loader: async () => {
+    editorLoading.value = true
+    try { return await import('../components/UniverWrapper.vue') }
+    finally { editorLoading.value = false }
+  },
+  delay: 80,
+  suspensible: false,
+})
+
 const store = useWorkshopStore()
 const snapshot = ref<any>()
 const previewSnapshot = ref<any>()
 const mockJson = ref('{\n  "customer": { "name": "Pyin" },\n  "order": { "amount": 128 }\n}')
-const selectedCell = ref<any>()
 const status = ref('请选择或创建一个模板')
 const panelCollapsed = ref(localStorage.getItem('export-workshop.panel') === 'collapsed')
 const previewOpen = ref(false)
 const downloadUrl = ref('')
 const busy = ref(false)
+const topNewOpen = ref(false)
 const activeId = computed(() => store.active?.id)
 const automaticVariableCount = computed(() => templateVariables(snapshot.value).length)
-const bindingCount = computed(() => automaticVariableCount.value + store.mappings.length)
 
 watch(activeId, () => {
   snapshot.value = store.active?.workbookSnapshot ? cloneWorkbook(store.active.workbookSnapshot) : undefined
   previewSnapshot.value = undefined
   store.changedCells = []
   downloadUrl.value = ''
-  status.value = store.active ? '模板已打开，可以编辑单元格并绑定数据' : '请选择或创建一个模板'
+  status.value = store.active
+    ? '在单元格中输入 {{customer.name}} 等模板语法，然后运行预览'
+    : '请选择或创建一个模板'
 }, { immediate: true })
 
-onMounted(async () => { await store.refreshTree() })
+onMounted(async () => {
+  try {
+    await store.refreshTree()
+    const firstTemplate = store.nodes.find(node => node.nodeType === 'TEMPLATE')
+    if (firstTemplate) await openTemplate(Number(String(firstTemplate.id).replace('template-', '')))
+  }
+  catch (error: any) { status.value = error.message || '模板资源加载失败' }
+})
 
 function ask(label: string, initial = '') { return window.prompt(label, initial)?.trim() }
-async function newBlank() { const name = ask('模板名称', '新建导出模板'); if (!name) return; const item = await workshopApi.createBlank({ name }); await store.refreshTree(); await store.openTemplate(item.id) }
+async function openTemplate(id: number) {
+  if (store.loading || store.active?.id === id) return
+  status.value = '正在打开模板…'
+  try {
+    await store.openTemplate(id)
+  } catch (error: any) {
+    status.value = error.message || '打开模板失败'
+  }
+}
+async function newBlank() { const name = ask('模板名称', '新建导出模板'); if (!name) return; const item = await workshopApi.createBlank({ name }); await store.refreshTree(); await openTemplate(item.id) }
 async function newFolder() { const name = ask('目录名称'); if (!name) return; await workshopApi.createFolder({ name }); await store.refreshTree() }
-async function upload(file: File) { status.value = '正在上传模板…'; try { const item = await workshopApi.upload(null, file); await store.refreshTree(); await store.openTemplate(item.id); status.value = '模板已导入' } catch (error: any) { status.value = error.message } }
+function runTopAction(action: () => void | Promise<void>) { topNewOpen.value = false; void action() }
+function triggerImport() { document.querySelector<HTMLInputElement>('.tree-panel input[type="file"]')?.click() }
+async function upload(file: File) { status.value = '正在上传模板…'; try { const item = await workshopApi.upload(null, file); await store.refreshTree(); await openTemplate(item.id); status.value = '模板已导入' } catch (error: any) { status.value = error.message } }
 async function mountNetwork() { const url = ask('网络模板 URL'); if (!url) return; status.value = '正在挂载网络模板…'; try { const item = await workshopApi.mountNetwork({ url }); await store.refreshTree(); await store.openTemplate(item.id); status.value = '网络模板已挂载' } catch (error: any) { status.value = error.message } }
 async function mountLocal() { const roots = await workshopApi.roots(); const root = ask(`本地来源目录（可选：${roots.join('；') || '未配置'}）`, roots[0] || ''); if (!root) return; try { await workshopApi.mountDirectory({ root }); await store.refreshTree(); status.value = '本地目录已挂载' } catch (error: any) { status.value = error.message } }
 async function rename(nodeId: string, name: string) { await workshopApi.rename(nodeId, name); await store.refreshTree(); if (store.active && nodeId === `template-${store.active.id}`) store.active.name = name }
 async function remove(nodeId: string) { if (!window.confirm('确定删除此资源？')) return; await workshopApi.remove(nodeId); store.closeTab(Number(nodeId.replace('template-', ''))); await store.refreshTree() }
+async function fork(id: number) { try { const item = await workshopApi.fork(id); await store.refreshTree(); await openTemplate(item.id); status.value = '已创建可编辑副本' } catch (error: any) { status.value = error.message } }
 async function save() { if (!snapshot.value || !store.active) return; busy.value = true; status.value = '正在保存模板…'; try { await store.save(snapshot.value); status.value = '模板已保存' } catch (error: any) { status.value = error.message } finally { busy.value = false } }
 
 async function renderPreview(openDialog = true) {
@@ -129,7 +156,7 @@ async function renderPreview(openDialog = true) {
     downloadUrl.value = ''
     status.value = store.changedCells.length
       ? `运行完成，已填充 ${store.changedCells.length} 个单元格`
-      : '运行完成；尚未配置变量映射，当前预览与原模板一致'
+      : '运行完成；未识别到可填充的模板语法，当前预览与原模板一致'
     if (openDialog) previewOpen.value = true
     return true
   } catch (error: any) {
@@ -172,11 +199,10 @@ function togglePanel() { panelCollapsed.value = !panelCollapsed.value; localStor
   --selection:var(--shell-tool-selected-bg,rgba(15,118,110,.1));
   --accent:var(--shell-accent,#0f766e);
   --changed:color-mix(in srgb,var(--shell-accent-strong,#b45309) 20%,var(--surface));
-  height:calc(100vh - 88px);min-height:650px;display:grid;grid-template-columns:260px minmax(0,1fr);grid-template-rows:64px 54px minmax(0,1fr) auto 28px;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)
+  height:calc(100vh - 88px);min-height:650px;display:grid;grid-template-columns:260px minmax(0,1fr);grid-template-rows:46px minmax(0,1fr) auto 28px;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)
 }
-.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px 14px;border-bottom:1px solid var(--divider);background:var(--surface)}.title-block{display:flex;align-items:baseline;gap:12px}.title-block strong{font-size:18px;color:var(--shell-tool-header-text,var(--text))}.title-block span{font-size:12px;color:var(--muted)}.top-actions{display:flex;gap:7px}.topbar button{padding:7px 12px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font:inherit}.topbar button:disabled{cursor:not-allowed;opacity:.48}.secondary-button{background:var(--button);color:var(--text)}.primary-button{border-color:var(--accent)!important;background:var(--accent);color:#fff;font-weight:600!important}
-.workflow{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:10px;padding:7px 16px;border-bottom:1px solid var(--divider);background:var(--surface-raised)}.workflow>div{display:flex;align-items:center;gap:7px;min-width:120px;color:var(--muted)}.workflow b{display:grid;width:24px;height:24px;place-content:center;border:1px solid var(--border);border-radius:50%;font-size:11px}.workflow span{display:grid;font-size:12px;font-weight:600}.workflow small{font-size:10px;font-weight:400;color:var(--muted)}.workflow i{width:34px;height:1px;background:var(--divider)}.workflow .done b{border-color:var(--accent);background:var(--accent);color:#fff}.workflow .done span,.workflow .current span{color:var(--text)}.workflow .current b{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px var(--selection)}
-.tree-panel{grid-column:1;grid-row:3/5}.editor-area{grid-column:2;grid-row:3;display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}.debug-panel{grid-column:2;grid-row:4}.status{grid-column:1/-1;grid-row:5}
-@media(max-width:900px){.workbench{grid-template-columns:220px minmax(0,1fr)}.workflow>div{min-width:auto}.workflow small{display:none}}
-@media(max-width:700px){.workbench{height:auto;min-height:760px;grid-template-columns:1fr;grid-template-rows:auto auto minmax(360px,1fr) auto 28px}.topbar{grid-column:1;align-items:flex-start}.title-block{display:grid;gap:2px}.top-actions{flex-wrap:wrap;justify-content:flex-end}.workflow{grid-column:1;justify-content:flex-start;overflow:auto}.workflow i{width:14px;min-width:14px}.tree-panel{display:none}.editor-area,.debug-panel{grid-column:1}.status{grid-column:1}}
+.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:6px 10px;border-bottom:1px solid var(--divider);background:var(--surface)}.title-block{display:flex;align-items:baseline;gap:10px;min-width:0}.title-block strong{font-size:15px;color:var(--shell-tool-header-text,var(--text))}.title-block span{overflow:hidden;color:var(--muted);text-overflow:ellipsis;white-space:nowrap;font-size:12px}.top-actions{display:flex;align-items:center;gap:5px}.topbar button{height:30px;padding:0 9px;border:1px solid var(--border);border-radius:4px;cursor:pointer;font:12px var(--font)}.topbar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.topbar button:disabled{cursor:not-allowed;opacity:.48}.top-split{position:relative;display:flex}.new-command{border-radius:4px 0 0 4px!important;background:var(--button);color:var(--text)}.new-more{width:23px;padding:0!important;border-left:0!important;border-radius:0 4px 4px 0!important;background:var(--button);color:var(--text)}.command-button{background:transparent;color:var(--text)}.topbar button:not(:disabled):hover{background:var(--hover)}.topbar .run-command{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:600}.topbar .run-command:not(:disabled):hover{filter:brightness(.94);background:var(--accent)}.top-menu{position:absolute;z-index:30;top:34px;right:0;min-width:185px;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--surface);box-shadow:0 8px 24px #0002}.top-menu button{display:block;width:100%;border:0!important;background:transparent!important;color:var(--text);text-align:left}.top-menu button:hover{background:var(--hover)!important}
+.tree-panel{grid-column:1;grid-row:2/4}.editor-area{grid-column:2;grid-row:2;position:relative;display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}.editor-loading{position:absolute;z-index:10;top:44px;left:50%;display:flex;align-items:center;gap:8px;transform:translateX(-50%);padding:7px 11px;border:1px solid var(--border);border-radius:5px;background:var(--surface-raised);box-shadow:0 6px 18px #0002;color:var(--muted);font-size:12px}.editor-loading span{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:editor-spin .7s linear infinite}.debug-panel{grid-column:2;grid-row:3}.status{grid-column:1/-1;grid-row:4}@keyframes editor-spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){.workbench{grid-template-columns:220px minmax(0,1fr)}}
+@media(max-width:700px){.workbench{height:auto;min-height:700px;grid-template-columns:1fr;grid-template-rows:46px minmax(360px,1fr) auto 28px}.topbar{grid-column:1}.title-block span{display:none}.top-actions{gap:3px}.topbar button{padding:0 7px}.tree-panel{display:none}.editor-area,.debug-panel{grid-column:1}.status{grid-column:1}}
 </style>

@@ -10,6 +10,7 @@ export const workshopApi = {
   rename: (nodeId: string, name: string) => request<any>(`${base}/nodes/${nodeId}/name`, { method: 'PUT', body: { name } }),
   remove: (nodeId: string) => request<void>(`${base}/nodes/${nodeId}`, { method: 'DELETE' }),
   save: (id: number, body: any) => request<any>(`${base}/templates/${id}/workbook`, { method: 'PUT', body }),
+  fork: (id: number) => request<any>(`${base}/templates/${id}/fork`, { method: 'POST' }),
   debug: (body: any) => request<any>(`${base}/debug/render`, { method: 'POST', body }),
   roots: () => request<string[]>(`${base}/sources/local-roots`),
   mountNetwork: (body: any) => request<any>(`${base}/templates/mount/network`, { method: 'POST', body }),

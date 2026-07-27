@@ -12,7 +12,9 @@ public class ConfigItemSaveRequest {
     private Long directoryId;
     private String itemKey;
     private String itemValue;
+    private String defaultValue;
     private String valueType;
+    private String status;
     private String description;
 
 }

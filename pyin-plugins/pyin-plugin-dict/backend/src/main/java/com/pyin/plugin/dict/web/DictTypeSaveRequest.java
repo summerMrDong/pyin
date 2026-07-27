@@ -8,6 +8,7 @@ import lombok.Setter;
 public class DictTypeSaveRequest {
 
     private Long id;
+    private Long categoryId;
     private String typeCode;
     private String typeName;
     private String status;
