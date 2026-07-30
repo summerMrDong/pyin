@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:embedded": "vite build --watch --mode embedded-watch",
     "build": "vite build"
   },
   "dependencies": {
+    "@imengyu/vue3-context-menu": "^1.5.6",
     "element-plus": "^2.7.6",
     "monaco-editor": "^0.52.2",
     "vue": "^3.4.27",

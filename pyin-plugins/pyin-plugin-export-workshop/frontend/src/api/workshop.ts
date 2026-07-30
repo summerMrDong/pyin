@@ -5,7 +5,8 @@ const base = '/plugins/export-workshop/admin'
 export const workshopApi = {
   tree: () => request<any[]>(`${base}/templates/tree`),
   template: (id: number) => request<any>(`${base}/templates/${id}`),
-  createBlank: (body: { directoryId?: number; name: string }) => request<any>(`${base}/templates/blank`, { method: 'POST', body }),
+  templateDownloadUrl: (templateId: string) => `${base}/templates/download/${encodeURIComponent(templateId)}`,
+  createBlank: (body: { directoryId?: number; id?: string; name: string }) => request<any>(`${base}/templates/blank`, { method: 'POST', body }),
   createFolder: (body: { parentId?: number; name: string }) => request<any>(`${base}/folders`, { method: 'POST', body }),
   rename: (nodeId: string, name: string) => request<any>(`${base}/nodes/${nodeId}/name`, { method: 'PUT', body: { name } }),
   remove: (nodeId: string) => request<void>(`${base}/nodes/${nodeId}`, { method: 'DELETE' }),
@@ -15,9 +16,13 @@ export const workshopApi = {
   roots: () => request<string[]>(`${base}/sources/local-roots`),
   mountNetwork: (body: any) => request<any>(`${base}/templates/mount/network`, { method: 'POST', body }),
   mountDirectory: (body: any) => request<any>(`${base}/templates/mount/local-directory`, { method: 'POST', body }),
-  upload: (directoryId: number | null, file: File) => {
+  upload: (directoryId: number | null, id: string | undefined, file: File) => {
     const form = new FormData(); form.append('file', file)
-    return request<any>(`${base}/templates/import${directoryId ? `?directoryId=${directoryId}` : ''}`, { method: 'POST', body: form })
+    const params = new URLSearchParams()
+    if (directoryId) params.set('directoryId', String(directoryId))
+    if (id) params.set('id', id)
+    const query = params.size ? `?${params.toString()}` : ''
+    return request<any>(`${base}/templates/import${query}`, { method: 'POST', body: form })
   },
   createExport: (templateId: number, body: any) => request<any>(`${base}/templates/${templateId}/exports`, { method: 'POST', body }),
   uploadExport: (taskId: string, file: Blob) => {

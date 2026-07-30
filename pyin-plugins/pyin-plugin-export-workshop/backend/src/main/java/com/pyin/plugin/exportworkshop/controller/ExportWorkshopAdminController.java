@@ -50,7 +50,7 @@ public class ExportWorkshopAdminController {
 
     @Permission(code = "export-workshop:import", name = "导入导出模板")
     @PostMapping("/templates/import")
-    public Result<?> importTemplate(@RequestParam(required = false) Long directoryId, @RequestPart("file") MultipartFile file) { return execute(() -> service.importFile(directoryId, file)); }
+    public Result<?> importTemplate(@RequestParam(required = false) Long directoryId, @RequestParam(required = false) String id, @RequestPart("file") MultipartFile file) { return execute(() -> service.importFile(directoryId, id, file)); }
 
     @Permission(code = "export-workshop:mount", name = "挂载导出模板")
     @PostMapping("/templates/mount/local-directory")
@@ -63,6 +63,14 @@ public class ExportWorkshopAdminController {
     @Permission(code = "export-workshop:view", name = "查看导出工坊")
     @GetMapping("/templates/{id}")
     public Result<?> template(@PathVariable Long id) { return execute(() -> service.readTemplate(id)); }
+
+    @Permission(code = "export-workshop:export", name = "导出模板文件")
+    @GetMapping("/templates/{id}/download")
+    public ResponseEntity<byte[]> downloadTemplate(@PathVariable Long id) { return templateDownload(service.downloadTemplate(id)); }
+
+    @Permission(code = "export-workshop:export", name = "导出模板文件")
+    @GetMapping("/templates/download/{templateId}")
+    public ResponseEntity<byte[]> downloadTemplateById(@PathVariable String templateId) { return templateDownload(service.downloadTemplateById(templateId)); }
 
     @Permission(code = "export-workshop:update", name = "编辑导出模板")
     @PutMapping("/templates/{id}/workbook")
@@ -110,6 +118,14 @@ public class ExportWorkshopAdminController {
     private Result<?> execute(ThrowingSupplier action) {
         try { Object value = action.get(); return value == null ? Result.ok() : Result.ok(value); }
         catch (BusinessException exception) { return Result.fail(exception.getCode(), exception.getMessage()); }
+    }
+
+    private ResponseEntity<byte[]> templateDownload(ExportWorkshopService.DownloadedTemplate template) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + java.net.URLEncoder.encode(template.fileName(), java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"))
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentLength(template.content().length)
+                .body(template.content());
     }
 
     @FunctionalInterface

@@ -1,5 +1,8 @@
 package com.pyin.plugin.config.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pyin.plugin.common.code.ErrorCode;
 import com.pyin.plugin.common.exception.BusinessException;
 import com.pyin.plugin.config.model.ConfigDirectoryMode;
@@ -33,7 +36,7 @@ import org.springframework.util.StringUtils;
 public class ConfigAdminService {
 
     private static final Pattern ITEM_KEY_PATTERN = Pattern.compile(
-            "^[a-z][A-Za-z0-9_-]{0,63}(?::[a-z][A-Za-z0-9_-]{0,63}){2,}$"
+            "^[a-z0-9][A-Za-z0-9_-]{0,63}(?::[a-z0-9][A-Za-z0-9_-]{0,63})*$"
     );
     private static final Pattern DIRECTORY_NAME_PATTERN = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
     private static final Pattern INTEGER_PATTERN = Pattern.compile("^-?(0|[1-9]\\d*)$");
@@ -72,8 +75,11 @@ public class ConfigAdminService {
     };
 
     private final JdbcTemplate jdbcTemplate;
-    public ConfigAdminService(JdbcTemplate jdbcTemplate) {
+    private final ObjectMapper objectMapper;
+
+    public ConfigAdminService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -97,7 +103,7 @@ public class ConfigAdminService {
                     namespace_id BIGINT NOT NULL,
                     directory_id BIGINT,
                     item_key VARCHAR(160) NOT NULL,
-                    item_value VARCHAR(4000) NOT NULL,
+                    item_value VARCHAR(4000),
                     default_value VARCHAR(4000),
                     value_type VARCHAR(32) NOT NULL,
                     status VARCHAR(16) NOT NULL DEFAULT 'ENABLED',
@@ -127,7 +133,9 @@ public class ConfigAdminService {
         ensureColumn("pyin_plugin_config_item", "directory_id", "BIGINT");
         ensureColumn("pyin_plugin_config_item", "default_value", "VARCHAR(4000)");
         ensureColumn("pyin_plugin_config_item", "status", "VARCHAR(16) NOT NULL DEFAULT 'ENABLED'");
+        allowNullItemValue();
         jdbcTemplate.update("UPDATE pyin_plugin_config_item SET status = ? WHERE status IS NULL", "ENABLED");
+        jdbcTemplate.update("UPDATE pyin_plugin_config_item SET status = ? WHERE status = ?", "ENABLED", "DRAFT");
         jdbcTemplate.update("UPDATE pyin_plugin_config_namespace SET directory_mode = ? WHERE directory_mode IS NULL", ConfigDirectoryMode.KEY_PROJECTION.name());
         ensureIndex("idx_pyin_config_directory_parent", "pyin_plugin_config_directory", "namespace_id, parent_id, sort_order");
         ensureIndex("idx_pyin_config_item_directory", "pyin_plugin_config_item", "directory_id");
@@ -238,10 +246,11 @@ public class ConfigAdminService {
         ConfigDirectoryMode directoryMode = ConfigDirectoryMode.from((String) namespace.get("directoryMode"));
         String itemKey = validateItemKey(request.getItemKey());
         ConfigValueType valueType = ConfigValueType.from(request.getValueType());
-        String itemValue = validateValue(valueType, request.getItemValue());
+        String status = validateStatus(request.getStatus());
+        String itemValue = request.getItemValue() == null || request.getItemValue().isBlank()
+                ? null : validateValue(valueType, request.getItemValue());
         String defaultValue = request.getDefaultValue() == null || request.getDefaultValue().isBlank()
                 ? null : validateValue(valueType, request.getDefaultValue());
-        String status = validateStatus(request.getStatus());
         String description = optionalText(request.getDescription(), 512, "description");
         if (directoryMode == ConfigDirectoryMode.KEY_PROJECTION && request.getDirectoryId() != null) {
             throw invalid("配置键投影模式不支持配置项目录归属。");
@@ -252,7 +261,7 @@ public class ConfigAdminService {
         Long existingId = jdbcTemplate.query("SELECT id FROM pyin_plugin_config_item WHERE namespace_id = ? AND item_key = ?",
                 resultSet -> resultSet.next() ? resultSet.getLong("id") : null, request.getNamespaceId(), itemKey);
         if (request.getId() == null && existingId != null) {
-            throw invalid("同一命名空间下的配置键已存在。");
+            throw invalid("当前空间已存在此 Key。");
         }
         if (request.getId() != null && existingId != null && !request.getId().equals(existingId)) {
             throw invalid("配置键已被其他记录占用。");
@@ -467,7 +476,7 @@ public class ConfigAdminService {
     private String validateItemKey(String value) {
         String key = requireText(value, "itemKey", 160);
         if (!ITEM_KEY_PATTERN.matcher(key).matches()) {
-            throw invalid("配置键必须至少包含三个以冒号分隔的段，并且每段以小写字母开头。");
+            throw invalid("配置键可直接填写，或使用冒号分隔层级；每段以小写字母或数字开头。");
         }
         return key;
     }
@@ -480,6 +489,7 @@ public class ConfigAdminService {
             case STRING -> value;
             case INTEGER -> validateInteger(value);
             case BOOLEAN -> validateBoolean(value);
+            case JSON -> validateJson(value);
         };
     }
 
@@ -500,6 +510,18 @@ public class ConfigAdminService {
             throw invalid("BOOLEAN 配置值只能是 true 或 false。");
         }
         return value;
+    }
+
+    private String validateJson(String value) {
+        try {
+            JsonNode json = objectMapper.readTree(value);
+            if (json == null || (!json.isObject() && !json.isArray())) {
+                throw invalid("JSON 配置值只能是对象或数组。");
+            }
+            return value;
+        } catch (JsonProcessingException exception) {
+            throw invalid("JSON 配置值格式不正确。");
+        }
     }
 
     private String validateStatus(String value) {
@@ -546,6 +568,21 @@ public class ConfigAdminService {
         if (!Boolean.TRUE.equals(exists)) {
             jdbcTemplate.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
         }
+    }
+
+    private void allowNullItemValue() {
+        jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
+            String databaseProduct = connection.getMetaData().getDatabaseProductName();
+            String statement = "MySQL".equalsIgnoreCase(databaseProduct)
+                    ? "ALTER TABLE pyin_plugin_config_item MODIFY COLUMN item_value VARCHAR(4000) NULL"
+                    : "H2".equalsIgnoreCase(databaseProduct)
+                            ? "ALTER TABLE pyin_plugin_config_item ALTER COLUMN item_value SET NULL"
+                            : "ALTER TABLE pyin_plugin_config_item ALTER COLUMN item_value DROP NOT NULL";
+            try (var sqlStatement = connection.createStatement()) {
+                sqlStatement.execute(statement);
+            }
+            return null;
+        });
     }
 
     private void ensureIndex(String name, String table, String columns) {

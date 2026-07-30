@@ -7,7 +7,8 @@ import java.util.Locale;
 public enum ConfigValueType {
     STRING,
     INTEGER,
-    BOOLEAN;
+    BOOLEAN,
+    JSON;
 
     public static ConfigValueType from(String value) {
         if (value == null || value.isBlank()) {

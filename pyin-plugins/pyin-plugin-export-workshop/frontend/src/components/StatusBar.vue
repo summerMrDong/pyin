@@ -3,9 +3,6 @@
     <span class="status-dot"></span>
     <span>{{ message || '就绪' }}</span>
     <span class="spacer"></span>
-    <span v-if="template">{{ template.name }} · Sheet1</span>
-    <span v-if="variableCount">{{ variableCount }} 个模板变量</span>
-    <span v-if="changedCount">{{ changedCount }} 个已填充单元格</span>
   </footer>
 </template>
 <script setup lang="ts">

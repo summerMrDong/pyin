@@ -11,7 +11,7 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, toRaw, watch } from 'vue'
-import { ICommandService, LocaleType, mergeLocales, ThemeService, Univer, UniverInstanceType } from '@univerjs/core'
+import { ICommandService, LocaleType, mergeLocales, Univer, UniverInstanceType } from '@univerjs/core'
 import DesignZhCN from '@univerjs/design/locale/zh-CN'
 import { UniverDocsPlugin } from '@univerjs/docs'
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui'
@@ -28,7 +28,6 @@ import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui'
 import SheetsUIZhCN from '@univerjs/sheets-ui/locale/zh-CN'
 import { UniverUIPlugin } from '@univerjs/ui'
 import UIZhCN from '@univerjs/ui/locale/zh-CN'
-import { defaultTheme, type Theme } from '@univerjs/themes'
 import '@univerjs/design/lib/index.css'
 import '@univerjs/ui/lib/index.css'
 import '@univerjs/docs-ui/lib/index.css'
@@ -45,29 +44,12 @@ let commandSubscription: { dispose: () => void } | undefined
 let themeObserver: MutationObserver | undefined
 let loadVersion = 0
 let internalSnapshot: any
+let renderedDarkMode = false
 
-function systemDarkMode() { return document.documentElement.classList.contains('dark') }
-
-function createTheme(): Theme {
-  const dark = systemDarkMode()
-  return {
-    ...defaultTheme,
-    white: dark ? '#1e1e1e' : '#ffffff',
-    black: dark ? '#f3f4f6' : '#172033',
-    primary: dark
-      ? { 50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a' }
-      : { 50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a' },
-    gray: dark
-      ? { 50: '#f3f4f6', 100: '#e5e7eb', 200: '#d1d5db', 300: '#9ca3af', 400: '#6b7280', 500: '#4b5563', 600: '#3c3f41', 700: '#2b2b2b', 800: '#1e1e1e', 900: '#181818' }
-      : { 50: '#f8fafc', 100: '#f5f5f5', 200: '#e5e7eb', 300: '#d0d0d0', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
-  }
-}
-
-function applySystemTheme() {
-  if (!univer) return
-  const themeService = univer.__getInjector().get(ThemeService)
-  themeService.setTheme(createTheme())
-  themeService.setDarkMode(systemDarkMode())
+/** 主壳以 data-theme="dark" 为主题事实来源；兼容独立挂载时的 dark class。 */
+function systemDarkMode() {
+  const root = document.documentElement
+  return root.dataset.theme === 'dark' || root.classList.contains('dark')
 }
 
 function dispose() {
@@ -87,11 +69,13 @@ async function create(snapshot: any) {
   if (!container.value || requestVersion !== loadVersion) return
 
   const hostId = `univer-sheet-${requestVersion}`
+  const darkMode = systemDarkMode()
+  renderedDarkMode = darkMode
   container.value.id = hostId
   univer = new Univer({
     locale: LocaleType.ZH_CN,
-    darkMode: systemDarkMode(),
-    theme: createTheme(),
+    // 只使用 Univer 官方深色模式，不叠加自定义色板。
+    darkMode,
     locales: {
       [LocaleType.ZH_CN]: mergeLocales(DesignZhCN, UIZhCN, DocsUIZhCN, SheetsZhCN, SheetsUIZhCN, SheetsFormulaUIZhCN, SheetsNumfmtUIZhCN),
     },
@@ -111,9 +95,12 @@ async function create(snapshot: any) {
     internalSnapshot = cloneWorkbook(workbook.save())
     emit('update:snapshot', internalSnapshot)
   })
-  themeObserver = new MutationObserver(applySystemTheme)
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-  applySystemTheme()
+  themeObserver = new MutationObserver(() => {
+    const nextDarkMode = systemDarkMode()
+    if (nextDarkMode !== renderedDarkMode && props.snapshot) void create(props.snapshot)
+  })
+  // 主壳主题的唯一事实来源是 data-theme。不要监听 class，Univer 自身也可能维护 class。
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 }
 
 watch(() => props.snapshot, snapshot => {

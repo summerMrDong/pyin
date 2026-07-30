@@ -2,7 +2,10 @@
   <div class="json-editor">
     <div class="json-editor-toolbar">
       <span>JSON 编辑器</span>
-      <el-button link type="primary" @click="formatJson">格式化 JSON</el-button>
+      <span class="json-editor-actions">
+        <span v-if="validationMessage" class="json-editor-validation" role="alert">{{ validationMessage }}</span>
+        <el-button link type="primary" title="格式化 JSON" aria-label="格式化 JSON" @click="formatJson"><el-icon><MagicStick /></el-icon></el-button>
+      </span>
     </div>
     <div ref="containerRef" class="json-editor-container" />
   </div>
@@ -10,12 +13,16 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { MagicStick } from '@element-plus/icons-vue'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import 'monaco-editor/esm/vs/language/json/monaco.contribution'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 
-const props = defineProps({ modelValue: { type: String, default: '' } })
+const props = defineProps({
+  modelValue: { type: String, default: '' },
+  validationMessage: { type: String, default: '' }
+})
 const emit = defineEmits(['update:modelValue', 'validation-change'])
 const containerRef = ref()
 let editor
@@ -44,6 +51,7 @@ onMounted(async () => {
     tabSize: 2,
     insertSpaces: true
   })
+  applyValidationMarker()
   applyTheme()
   model.onDidChangeContent(() => {
     if (!applyingValue) emit('update:modelValue', model.getValue())
@@ -63,6 +71,8 @@ watch(() => props.modelValue, (value) => {
   applyingValue = false
   validate()
 })
+
+watch(() => props.validationMessage, applyValidationMarker)
 
 onBeforeUnmount(() => {
   observer?.disconnect()
@@ -105,6 +115,18 @@ function validate() {
   }
 }
 
+function applyValidationMarker() {
+  if (!model) return
+  monaco.editor.setModelMarkers(model, 'pyin-json-validation', props.validationMessage ? [{
+    startLineNumber: 1,
+    startColumn: 1,
+    endLineNumber: 1,
+    endColumn: 1,
+    message: props.validationMessage,
+    severity: monaco.MarkerSeverity.Error
+  }] : [])
+}
+
 function formatJson() {
   try {
     model.setValue(JSON.stringify(JSON.parse(model.getValue()), null, 2))
@@ -115,7 +137,11 @@ function formatJson() {
 </script>
 
 <style scoped>
-.json-editor { border: 1px solid var(--shell-tool-border-strong); border-radius: 6px; overflow: hidden; }
-.json-editor-toolbar { display: flex; min-height: 34px; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 1px solid var(--shell-tool-divider); background: var(--shell-tool-toolbar-bg); color: var(--shell-tool-subtle-text); font-size: 12px; font-weight: 600; }
-.json-editor-container { height: 320px; background: var(--shell-tool-code-bg); }
+.json-editor { width: 100%; min-width: 0; border: 1px solid var(--shell-tool-border-strong); border-radius: 6px; overflow: hidden; }
+.json-editor-toolbar, .json-editor-actions { display: flex; align-items: center; }
+.json-editor-toolbar { min-height: 34px; justify-content: space-between; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--shell-tool-divider); background: var(--shell-tool-toolbar-bg); color: var(--shell-tool-subtle-text); font-size: 12px; font-weight: 600; }
+.json-editor-actions { min-width: 0; gap: 4px; }
+.json-editor-actions :deep(.el-button) { width: 24px; height: 24px; margin: 0; padding: 0; font-size: 15px; }
+.json-editor-validation { overflow: hidden; color: var(--el-color-danger, #d14d4d); font-size: 10px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.json-editor-container { width: 100%; height: 320px; background: var(--shell-tool-code-bg); }
 </style>

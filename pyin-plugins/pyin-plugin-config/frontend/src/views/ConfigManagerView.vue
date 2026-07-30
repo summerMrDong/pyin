@@ -1,193 +1,162 @@
 <template>
   <section class="config-manager" tabindex="-1">
-    <aside class="resource-explorer">
-      <header class="explorer-header">
-        <div>
-          <p class="eyebrow">CONFIGURATION</p>
-          <h2>配置资源管理器</h2>
-        </div>
-        <span class="item-total">{{ items.length }}</span>
-      </header>
-
-      <el-input v-model.trim="treeKeyword" class="tree-search" placeholder="搜索配置目录或 Key" clearable>
-        <template #suffix><span class="search-glyph">⌕</span></template>
-      </el-input>
-
-      <div class="tree-caption"><span>配置目录</span><span>Key 投影</span></div>
-      <el-tree
-        ref="treeRef"
-        :key="treeVersion"
-        class="key-tree"
-        :data="filteredTreeData"
-        node-key="nodeKey"
-        :props="treeProps"
-        :default-expanded-keys="expandedKeys"
-        :expand-on-click-node="false"
-        highlight-current
-        @node-click="handleTreeNodeClick"
-      >
-        <template #default="{ data }">
-          <span class="tree-node" :class="{ 'is-key': data.kind === 'item' }">
-            <span class="tree-node-main"><span class="tree-icon">{{ data.kind === 'item' ? '⌘' : '▾' }}</span><span>{{ data.label }}</span></span>
-            <small>{{ data.itemCount }}</small>
-          </span>
-        </template>
-      </el-tree>
-
-      <footer class="explorer-footer">
-        <el-button text @click="openItemCreate"><span class="button-glyph">＋</span> 新建配置</el-button>
-        <el-button text @click="reloadWorkspace"><span class="button-glyph">↻</span> 刷新目录</el-button>
-      </footer>
-    </aside>
-
-    <main class="config-workspace">
-      <header class="workspace-toolbar">
-        <div class="toolbar-actions">
-          <el-button type="primary" @click="openItemCreate"><span class="button-glyph">＋</span> 新建配置</el-button>
-          <el-button :disabled="!selectedItem" @click="openItemEdit(selectedItem)">编辑</el-button>
-          <el-button :disabled="!selectedItem" @click="confirmItemDelete(selectedItem)">删除</el-button>
-          <el-button :disabled="!selectedItem || selectedItem.status === 'ENABLED'" @click="setStatus('ENABLED')">启用</el-button>
-          <el-button :disabled="!selectedItem || selectedItem.status === 'DISABLED'" @click="setStatus('DISABLED')">停用</el-button>
-          <span class="toolbar-divider" />
-          <el-button @click="notImplemented('导入')">导入</el-button>
-          <el-button @click="notImplemented('导出')">导出</el-button>
-          <el-dropdown @command="handleMoreCommand">
-            <el-button>更多 <span class="caret">⌄</span></el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="namespaces">命名空间信息</el-dropdown-item>
-                <el-dropdown-item command="copy" :disabled="!selectedItem">复制完整 Key</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-        <div class="search-actions">
-          <el-input ref="topSearchRef" v-model.trim="keyword" placeholder="搜索 Key / 值 / 说明" clearable @keyup.enter="loadItems">
-            <template #suffix><span class="search-glyph">⌕</span></template>
-          </el-input>
-          <el-button circle title="筛选" @click="notImplemented('高级筛选')">⏷</el-button>
-          <el-button circle title="刷新" @click="reloadWorkspace">↻</el-button>
-        </div>
-      </header>
-
-      <div class="breadcrumb-bar">
-        <span>当前位置：</span>
-        <template v-for="(segment, index) in breadcrumb" :key="segment.path">
-          <button type="button" :class="{ active: index === breadcrumb.length - 1 }" @click="selectPath(segment.path)">{{ segment.label }}</button>
-          <span v-if="index < breadcrumb.length - 1" class="breadcrumb-separator">›</span>
-        </template>
-      </div>
-
-      <section class="list-section">
-        <el-table
-          ref="tableRef"
-          v-loading="itemsLoading"
-          class="items-table"
-          :data="visibleItems"
-          row-key="id"
-          highlight-current-row
-          @row-click="selectItem"
-          @row-dblclick="openItemEdit"
-          @selection-change="selectedRows = $event"
-        >
-          <el-table-column type="selection" width="42" />
-          <el-table-column label="Key" min-width="265" class-name="code-cell">
-            <template #default="{ row }"><span class="item-key">{{ row.itemKey }}</span></template>
-          </el-table-column>
-          <el-table-column label="值" min-width="150">
-            <template #default="{ row }"><el-tooltip :content="row.itemValue"><span class="value-preview">{{ row.itemValue }}</span></el-tooltip></template>
-          </el-table-column>
-          <el-table-column label="类型" width="104">
-            <template #default="{ row }"><span class="type-tag" :class="`type-${row.valueType?.toLowerCase()}`">{{ typeLabel(row.valueType) }}</span></template>
-          </el-table-column>
-          <el-table-column label="状态" width="105">
-            <template #default="{ row }"><span class="status-tag" :class="row.status === 'DISABLED' ? 'disabled' : ''"><i />{{ row.status === 'DISABLED' ? '停用' : '启用' }}</span></template>
-          </el-table-column>
-          <el-table-column label="更新时间" width="176"><template #default="{ row }">{{ formatTime(row.updatedAt) }}</template></el-table-column>
-          <el-table-column label="说明" min-width="175"><template #default="{ row }"><span class="description-cell">{{ row.description || '—' }}</span></template></el-table-column>
-        </el-table>
-        <footer class="table-footer">
-          <span>共 {{ visibleItems.length }} 条</span>
-          <div><span>20 条/页</span><button type="button" aria-label="上一页">‹</button><button type="button" class="current-page">1</button><button type="button" aria-label="下一页">›</button></div>
-        </footer>
-      </section>
-
-      <section class="details-section">
-        <div class="details-title"><span class="accent-line" />配置详情 <span v-if="!selectedItem" class="details-empty">选择一项配置以查看详情</span></div>
-        <template v-if="selectedItem">
-          <div class="details-grid">
-            <div class="detail-form">
-              <div class="detail-field wide"><label>完整 Key</label><div class="read-value code-value"><span>{{ selectedItem.itemKey }}</span><button type="button" title="复制 Key" @click="copyKey">⧉</button></div></div>
-              <div class="detail-field"><label>类型</label><div class="read-value"><span class="type-tag" :class="`type-${selectedItem.valueType?.toLowerCase()}`">{{ typeLabel(selectedItem.valueType) }}</span></div></div>
-              <div class="detail-field"><label>值</label><div class="read-value code-value">{{ selectedItem.itemValue }}</div></div>
-              <div class="detail-field"><label>默认值</label><div class="read-value code-value">{{ selectedItem.defaultValue || '未设置' }}</div></div>
-              <div class="detail-field wide"><label>说明</label><div class="read-value">{{ selectedItem.description || '未填写说明' }}</div></div>
-              <div class="detail-field"><label>状态</label><el-radio-group :model-value="selectedItem.status === 'DISABLED' ? 'DISABLED' : 'ENABLED'" size="small" @change="setStatus"><el-radio value="ENABLED">启用</el-radio><el-radio value="DISABLED">停用</el-radio></el-radio-group></div>
-              <div class="detail-field"><label>更新时间</label><div class="read-value">{{ formatTime(selectedItem.updatedAt) }}</div></div>
-              <div class="detail-field"><label>创建时间</label><div class="read-value">{{ formatTime(selectedItem.createdAt) }}</div></div>
-            </div>
-            <aside class="key-guide">
-              <p class="guide-title">命名空间路径</p>
-              <div class="path-chips"><span v-for="part in selectedItem.itemKey.split(':').slice(0, -1)" :key="part">{{ part }}</span></div>
-              <div class="guide-card"><strong>命名规则</strong><ol><li>Key 必须以小写字母开头。</li><li>使用冒号 <code>:</code> 分隔层级。</li><li>每段允许字母、数字、下划线和短横线。</li><li>至少包含三个层级，不允许空段。</li></ol><p>示例：system:module:feature:name</p></div>
-              <div class="guide-card"><strong>支持的数据类型</strong><p><span class="type-tag type-string">字符串</span> 任意文本内容</p><p><span class="type-tag type-integer">整数</span> 64 位整数</p><p><span class="type-tag type-boolean">布尔</span> true / false</p></div>
-            </aside>
+    <el-splitter layout="horizontal" class="config-splitter">
+      <el-splitter-panel :size="sidebarPanelSize" :min="sidebarPanelMin" max="75%" @update:size="onSidebarSizeChange">
+        <aside class="resource-explorer">
+          <nav class="tool-rail" aria-label="配置工作区工具栏">
+            <button :class="{ active: spacePanelVisible }" title="空间" aria-label="空间" @click="toggleSidebarPanel('spaces')">空间</button>
+          </nav>
+          <div class="sidebar-content">
+            <el-splitter v-if="spacePanelVisible" layout="horizontal" class="side-panel-splitter">
+              <el-splitter-panel size="50%" min="25%">
+                <ConfigSpaceManager
+                  :spaces="namespaces"
+                  :active-space-id="activeNamespaceId"
+                  @select="selectNamespaceFromManager"
+                  @create="openNamespaceCreate"
+                  @edit="openNamespaceEdit"
+                  @delete="confirmNamespaceDelete"
+                  @refresh="reloadWorkspace"
+                />
+              </el-splitter-panel>
+              <el-splitter-panel :min="210">
+                <ConfigDirectoryTree
+                  ref="treeRef"
+                  :items="items"
+                  @node-click="handleTreeNodeClick"
+                  @create-item="openItemCreate"
+                  @edit-item="openTreeItemEdit"
+                  @copy-key="copyTreeItemKey"
+                  @set-status="setTreeItemStatus"
+                  @delete-item="deleteTreeItem"
+                  @refresh="reloadWorkspace"
+                />
+              </el-splitter-panel>
+            </el-splitter>
+            <ConfigSpaceManager
+              v-else-if="spacePanelVisible"
+              :spaces="namespaces"
+              :active-space-id="activeNamespaceId"
+              @select="selectNamespaceFromManager"
+              @create="openNamespaceCreate"
+              @edit="openNamespaceEdit"
+              @delete="confirmNamespaceDelete"
+              @refresh="reloadWorkspace"
+            />
+            <ConfigDirectoryTree
+              v-else
+              ref="treeRef"
+              :items="items"
+              @node-click="handleTreeNodeClick"
+              @create-item="openItemCreate"
+              @edit-item="openTreeItemEdit"
+              @copy-key="copyTreeItemKey"
+              @set-status="setTreeItemStatus"
+              @delete-item="deleteTreeItem"
+              @refresh="reloadWorkspace"
+            />
           </div>
+        </aside>
+      </el-splitter-panel>
+
+      <el-splitter-panel>
+        <main class="config-workspace">
+      <section class="details-section">
+        <div class="details-title"><span class="accent-line" /><span v-if="isDetailDraft" class="draft-indicator" aria-hidden="true" /><span v-if="detailChanged" class="modified-indicator" aria-hidden="true" />{{ isDetailDraft ? '新建配置' : '配置详情' }} <span v-if="selectedItem" class="detail-space-inline">所属空间：{{ detailSpaceLabel }}</span><span v-else class="details-empty">选择一项配置以直接编辑</span><el-button v-if="selectedItem" class="detail-delete-button" size="small" type="danger" plain @click="confirmItemDelete(selectedItem)">删除</el-button><el-button v-if="selectedItem" type="primary" size="small" :loading="detailSaving" :disabled="!detailChanged" @click="submitDetail">保存</el-button></div>
+        <template v-if="selectedItem">
+          <el-form ref="detailFormRef" class="detail-editor" :model="detailForm" :rules="itemRules" label-position="top" @submit.prevent="submitDetail">
+            <el-form-item label="Key" prop="itemKey" class="detail-key-field"><el-input v-model="detailForm.itemKey" readonly><template #append><button class="copy-key-button" type="button" title="复制 Key" @click="copyKey(detailForm)">⧉</button></template></el-input><div class="key-preview"><span>空间路径：{{ detailKeyAnalysis.namespace || '—' }}</span><span>配置名称：{{ detailKeyAnalysis.name || '—' }}</span></div></el-form-item>
+            <el-form-item label="说明" class="detail-description-field"><el-input v-model.trim="detailForm.description" placeholder="说明该配置的用途" /></el-form-item>
+            <el-form-item label="类型" prop="valueType"><el-select v-model="detailForm.valueType" disabled><el-option label="String" value="STRING" /><el-option label="Integer" value="INTEGER" /><el-option label="Boolean" value="BOOLEAN" /><el-option label="JSON" value="JSON" /></el-select></el-form-item>
+            <el-form-item label="状态"><el-radio-group v-model="detailForm.status"><el-radio value="ENABLED">启用</el-radio><el-radio value="DISABLED">停用</el-radio></el-radio-group></el-form-item>
+            <section class="value-editor-block wide">
+              <div class="value-editor-heading"><span>当前值</span><small>修改后点击右上角“保存”生效</small></div>
+              <el-form-item prop="itemValue" :show-message="detailForm.valueType !== 'JSON'">
+                <JsonValueEditor v-if="detailForm.valueType === 'JSON'" v-model="detailForm.itemValue" :validation-message="detailValueError" @validation-change="handleDetailJsonValidation" />
+                <el-input v-else v-model="detailForm.itemValue" type="textarea" :rows="16" resize="vertical" placeholder="请输入配置值" @input="restrictDetailValue" />
+              </el-form-item>
+            </section>
+            <el-alert v-if="detailValueError && detailForm.valueType !== 'JSON'" :title="detailValueError" type="error" :closable="false" class="detail-value-error wide" />
+          </el-form>
         </template>
       </section>
-    </main>
+        </main>
+      </el-splitter-panel>
+    </el-splitter>
 
-    <el-drawer v-model="itemEditorVisible" :title="itemEditorMode === 'create' ? '新建配置' : '编辑配置'" size="520px" destroy-on-close>
-      <el-form ref="itemFormRef" :model="itemForm" :rules="itemRules" label-position="top">
-        <el-form-item label="所属命名空间" prop="namespaceId"><el-select v-model="itemForm.namespaceId" :disabled="itemEditorMode === 'edit'" placeholder="请选择命名空间"><el-option v-for="namespace in namespaces" :key="namespace.id" :label="namespaceLabel(namespace)" :value="namespace.id" /></el-select></el-form-item>
-        <el-form-item label="Key" prop="itemKey"><el-input v-model.trim="itemForm.itemKey" placeholder="system:auth:login:maxRetry" /><div class="key-preview"><span>命名空间：{{ keyAnalysis.namespace || '—' }}</span><span>配置名称：{{ keyAnalysis.name || '—' }}</span></div></el-form-item>
-        <el-form-item label="类型" prop="valueType"><el-select v-model="itemForm.valueType" @change="validateValue"><el-option label="字符串 String" value="STRING" /><el-option label="整数 Integer" value="INTEGER" /><el-option label="布尔 Boolean" value="BOOLEAN" /></el-select></el-form-item>
-        <el-form-item label="值" prop="itemValue"><el-input-number v-if="itemForm.valueType === 'INTEGER'" v-model="numericEditorValue" :precision="0" :step="1" controls-position="right" /><el-switch v-else-if="itemForm.valueType === 'BOOLEAN'" v-model="booleanEditorValue" active-text="true" inactive-text="false" /><el-input v-else v-model="itemForm.itemValue" placeholder="请输入字符串值" /></el-form-item>
-        <el-form-item label="默认值"><el-input-number v-if="itemForm.valueType === 'INTEGER'" v-model="numericDefaultValue" :precision="0" :step="1" controls-position="right" /><el-switch v-else-if="itemForm.valueType === 'BOOLEAN'" v-model="booleanDefaultValue" active-text="true" inactive-text="false" /><el-input v-else v-model="itemForm.defaultValue" placeholder="可选" /></el-form-item>
-        <el-alert v-if="valueError" :title="valueError" type="error" :closable="false" class="value-error" />
-        <el-form-item label="说明"><el-input v-model.trim="itemForm.description" type="textarea" :rows="3" placeholder="说明该配置的用途" /></el-form-item>
-        <el-form-item label="状态"><el-radio-group v-model="itemForm.status"><el-radio value="ENABLED">启用</el-radio><el-radio value="DISABLED">停用</el-radio></el-radio-group></el-form-item>
+    <el-dialog v-model="itemEditorVisible" class="config-editor-dialog item-editor-dialog" width="480px" :show-close="false" destroy-on-close :close-on-click-modal="false">
+      <el-form ref="itemFormRef" class="item-editor-form" :model="itemForm" :rules="itemRules" label-position="right" label-width="42px">
+        <el-form-item label="Key" prop="itemKey" :show-message="false"><el-input v-model.trim="itemForm.itemKey" placeholder="例如：order:timeout 或 timeout" @blur="keyTouched = true" /><div class="create-key-hint" :class="{ invalid: keyTouched && !keyPattern.test(itemForm.itemKey || '') }">{{ keyTouched && !keyPattern.test(itemForm.itemKey || '') ? 'Key 仅支持字母、数字、下划线、短横线和冒号分层。' : '支持单个 Key 或使用冒号分层。' }}</div></el-form-item>
+        <el-form-item label="类型" prop="valueType"><el-select v-model="itemForm.valueType" @change="validateValue"><el-option label="String" value="STRING" /><el-option label="Integer" value="INTEGER" /><el-option label="Boolean" value="BOOLEAN" /><el-option label="JSON" value="JSON" /></el-select></el-form-item>
       </el-form>
-      <template #footer><div class="drawer-footer"><el-button @click="itemEditorVisible = false">取消</el-button><el-button type="primary" :loading="itemSaving" @click="submitItem">保存配置</el-button></div></template>
-    </el-drawer>
+      <template #footer><div class="drawer-footer"><el-button @click="itemEditorVisible = false">取消</el-button><el-button type="primary" :loading="itemSaving" @click="continueItemCreate">下一步</el-button></div></template>
+    </el-dialog>
+
+    <el-dialog v-model="namespaceDialogVisible" class="config-editor-dialog namespace-editor-dialog" :title="namespaceEditorMode === 'create' ? '新建空间' : '编辑空间'" width="430px" destroy-on-close :close-on-click-modal="false" @closed="resetNamespaceDraft">
+      <el-form ref="namespaceFormRef" :model="namespaceForm" :rules="namespaceRules" label-position="top" @submit.prevent="submitNamespace">
+        <el-form-item label="空间名称" prop="displayName"><el-input v-model.trim="namespaceForm.displayName" maxlength="128" placeholder="例如：订单服务生产空间" /></el-form-item>
+        <el-form-item label="空间编码" prop="namespaceCode"><el-input v-model.trim="namespaceForm.namespaceCode" maxlength="128" placeholder="例如：order-service" /></el-form-item>
+        <el-form-item label="环境" prop="env"><el-input v-model.trim="namespaceForm.env" maxlength="64" placeholder="例如：prod" /></el-form-item>
+        <el-form-item label="说明"><el-input v-model.trim="namespaceForm.description" type="textarea" :rows="3" maxlength="512" show-word-limit placeholder="可选" /></el-form-item>
+      </el-form>
+      <template #footer><div class="drawer-footer"><el-button @click="namespaceDialogVisible = false">取消</el-button><el-button type="primary" :loading="namespaceSaving" @click="submitNamespace">保存空间</el-button></div></template>
+    </el-dialog>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deleteItem, fetchItemDetail, fetchItems, fetchNamespaces, saveItem } from '../api/configAdminApi'
+import ConfigDirectoryTree from '../components/ConfigDirectoryTree.vue'
+import ConfigSpaceManager from '../components/ConfigSpaceManager.vue'
+import JsonValueEditor from '../components/JsonValueEditor.vue'
+import { deleteItem, deleteNamespace, fetchItemDetail, fetchItems, fetchNamespaces, saveItem, saveNamespace } from '../api/configAdminApi'
 
 const namespaces = ref([])
+const activeNamespaceId = ref(Number(localStorage.getItem('config.active-namespace-id')) || null)
 const items = ref([])
 const keyword = ref('')
-const treeKeyword = ref('')
 const selectedNode = ref()
 const selectedItem = ref()
 const selectedRows = ref([])
-const expandedKeys = ref([])
-const treeVersion = ref(0)
 const itemsLoading = ref(false)
 const itemSaving = ref(false)
 const itemEditorVisible = ref(false)
 const itemEditorMode = ref('create')
 const valueError = ref('')
+const keyTouched = ref(false)
+const spacePanelVisible = ref(localStorage.getItem('config.space-panel') !== 'collapsed')
+const sidebarWidth = ref(Number(localStorage.getItem('config.sidebar-width-v2')) || null)
+const sidebarPanelSize = computed(() => sidebarWidth.value == null ? '66%' : sidebarWidth.value + 28)
+const sidebarPanelMin = computed(() => minimumSidebarWidth() + 28)
 const treeRef = ref()
 const tableRef = ref()
 const topSearchRef = ref()
 const itemFormRef = ref()
 const itemForm = reactive(newItem())
-const treeProps = { label: 'label', children: 'children' }
-const keyPattern = /^[a-z][A-Za-z0-9_-]{0,63}(?::[a-z][A-Za-z0-9_-]{0,63}){2,}$/
+const detailFormRef = ref()
+const detailForm = reactive(newItem())
+const detailSaving = ref(false)
+const detailValueError = ref('')
+const detailBaseline = ref('')
+const namespaceDialogVisible = ref(false)
+const namespaceEditorMode = ref('create')
+const namespaceSaving = ref(false)
+const namespaceFormRef = ref()
+const namespaceForm = reactive(newNamespace())
+const keyPattern = /^[a-z0-9][A-Za-z0-9_-]{0,63}(?::[a-z0-9][A-Za-z0-9_-]{0,63})*$/
 const itemRules = {
-  namespaceId: [{ required: true, message: '请选择所属命名空间', trigger: 'change' }],
-  itemKey: [{ validator: (_rule, value, callback) => keyPattern.test(value || '') ? callback() : callback(new Error('Key 至少包含三个冒号分隔的段，且每段以小写字母开头')), trigger: 'blur' }],
+  namespaceId: [{ required: true, message: '请选择所属空间', trigger: 'change' }],
+  itemKey: [{ validator: (_rule, value, callback) => keyPattern.test(value || '') ? callback() : callback(new Error('Key 可直接填写，或使用冒号分隔层级；每段以小写字母或数字开头')), trigger: 'blur' }],
   valueType: [{ required: true, message: '请选择数据类型', trigger: 'change' }],
-  itemValue: [{ required: true, message: '请输入配置值', trigger: 'blur' }]
+  itemValue: []
+}
+const namespaceRules = {
+  displayName: [{ required: true, message: '请输入空间名称', trigger: 'blur' }],
+  namespaceCode: [{ required: true, message: '请输入空间编码', trigger: 'blur' }],
+  env: [{ required: true, message: '请输入环境', trigger: 'blur' }]
 }
 
-const treeData = computed(() => buildKeyTree(items.value))
-const filteredTreeData = computed(() => filterTree(treeData.value, treeKeyword.value))
 const visibleItems = computed(() => {
   if (!selectedNode.value) return items.value
   if (selectedNode.value.kind === 'item') return items.value.filter((item) => item.id === selectedNode.value.itemId)
@@ -199,37 +168,57 @@ const breadcrumb = computed(() => {
   if (!parts.length) return [{ label: '全部配置', path: '' }]
   return parts.map((label, index) => ({ label, path: parts.slice(0, index + 1).join(':') }))
 })
-const keyAnalysis = computed(() => {
-  const parts = (itemForm.itemKey || '').split(':').filter(Boolean)
+const detailKeyAnalysis = computed(() => {
+  const parts = (detailForm.itemKey || '').split(':').filter(Boolean)
   return { namespace: parts.slice(0, -1).join(' > '), name: parts.at(-1) || '' }
 })
+const detailSpaceLabel = computed(() => namespaceLabel(namespaces.value.find((namespace) => namespace.id === detailForm.namespaceId)))
+const isDetailDraft = computed(() => Boolean(selectedItem.value?.id) && (detailForm.itemValue == null || detailForm.itemValue === ''))
+const detailChanged = computed(() => Boolean(selectedItem.value?.id) && detailBaseline.value !== detailSnapshot(detailForm))
 const numericEditorValue = computed({ get: () => itemForm.itemValue === '' ? undefined : Number(itemForm.itemValue), set: (value) => { itemForm.itemValue = value == null ? '' : String(value) } })
-const numericDefaultValue = computed({ get: () => itemForm.defaultValue === '' ? undefined : Number(itemForm.defaultValue), set: (value) => { itemForm.defaultValue = value == null ? '' : String(value) } })
 const booleanEditorValue = computed({ get: () => itemForm.itemValue === 'true', set: (value) => { itemForm.itemValue = value ? 'true' : 'false' } })
-const booleanDefaultValue = computed({ get: () => itemForm.defaultValue === 'true', set: (value) => { itemForm.defaultValue = value ? 'true' : 'false' } })
+const detailNumericValue = computed({ get: () => detailForm.itemValue === '' ? undefined : Number(detailForm.itemValue), set: (value) => { detailForm.itemValue = value == null ? '' : String(value) } })
+const detailBooleanValue = computed({ get: () => detailForm.itemValue === 'true', set: (value) => { detailForm.itemValue = value ? 'true' : 'false' } })
 
-watch(treeData, (tree) => {
-  if (!selectedNode.value) expandedKeys.value = tree.map((node) => node.nodeKey)
-})
 watch(keyword, () => { window.clearTimeout(loadItems.timer); loadItems.timer = window.setTimeout(loadItems, 220) })
 
 onMounted(async () => {
-  await Promise.all([loadNamespaces(), loadItems()])
+  await loadNamespaces()
+  await loadItems()
   window.addEventListener('keydown', handleShortcut)
+  document.addEventListener('contextmenu', preventBrowserContextMenu, true)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleShortcut)
+  document.removeEventListener('contextmenu', preventBrowserContextMenu, true)
+})
+
+function preventBrowserContextMenu(event) {
+  event.preventDefault()
+}
 
 async function loadNamespaces() {
-  try { namespaces.value = await fetchNamespaces() } catch (error) { ElMessage.error(error.message || '加载命名空间失败') }
+  try {
+    namespaces.value = await fetchNamespaces()
+    if (!namespaces.value.some((space) => space.id === activeNamespaceId.value)) {
+      activeNamespaceId.value = namespaces.value[0]?.id ?? null
+    }
+    persistActiveNamespace()
+  } catch (error) { ElMessage.error(error.message || '加载空间失败') }
 }
 
 async function loadItems() {
   itemsLoading.value = true
   const currentId = selectedItem.value?.id
   try {
-    items.value = await fetchItems(undefined, keyword.value)
-    selectedItem.value = items.value.find((item) => item.id === currentId) || selectedItem.value
-    treeVersion.value++
+    items.value = activeNamespaceId.value ? await fetchItems(activeNamespaceId.value, keyword.value) : []
+    const current = items.value.find((item) => item.id === currentId)
+    if (current) await selectItem(current)
+    else {
+      Object.assign(detailForm, newItem())
+      detailBaseline.value = ''
+    }
+    selectedItem.value = current
   } catch (error) {
     ElMessage.error(error.message || '加载配置项失败')
   } finally {
@@ -237,9 +226,45 @@ async function loadItems() {
   }
 }
 
-async function reloadWorkspace() {
-  await Promise.all([loadNamespaces(), loadItems()])
-  ElMessage.success('配置目录已刷新')
+async function reloadWorkspace(silent = false) {
+  await loadNamespaces()
+  await loadItems()
+  if (!silent) ElMessage.success('空间与配置目录已刷新')
+}
+
+async function switchNamespace(namespaceId) {
+  const nextId = Number(namespaceId)
+  if (!nextId || nextId === activeNamespaceId.value) return
+  activeNamespaceId.value = nextId
+  persistActiveNamespace()
+  selectedNode.value = undefined
+  selectedItem.value = undefined
+  treeRef.value?.clearSelection()
+  await loadItems()
+}
+
+async function selectNamespaceFromManager(space) {
+  await switchNamespace(space.id)
+}
+
+function toggleSidebarPanel(panel) {
+  if (panel !== 'spaces') return
+  spacePanelVisible.value = !spacePanelVisible.value
+  if (sidebarWidth.value != null) sidebarWidth.value = Math.max(sidebarWidth.value, minimumSidebarWidth())
+  persistSidebarPanels()
+}
+
+function persistSidebarPanels() {
+  localStorage.setItem('config.space-panel', spacePanelVisible.value ? 'open' : 'collapsed')
+}
+
+function minimumSidebarWidth() {
+  return spacePanelVisible.value ? 390 : 210
+}
+
+function persistActiveNamespace() {
+  if (activeNamespaceId.value) localStorage.setItem('config.active-namespace-id', String(activeNamespaceId.value))
+  else localStorage.removeItem('config.active-namespace-id')
 }
 
 function handleTreeNodeClick(node) {
@@ -253,25 +278,38 @@ function handleTreeNodeClick(node) {
 function selectPath(path) {
   if (!path) {
     selectedNode.value = undefined
-    treeRef.value?.setCurrentKey(undefined)
+    treeRef.value?.clearSelection()
     return
   }
-  const node = findTreeNode(treeData.value, `directory:${path}`)
-  if (node) {
-    selectedNode.value = node
-    treeRef.value?.setCurrentKey(node.nodeKey)
+  treeRef.value?.selectPath(path)
+}
+
+async function selectItem(row) {
+  selectedItem.value = row
+  tableRef.value?.setCurrentRow(row)
+  Object.assign(detailForm, newItem(row))
+  detailBaseline.value = detailSnapshot(detailForm)
+  detailValueError.value = ''
+  try {
+    const detail = await fetchItemDetail(row.id)
+    if (selectedItem.value?.id === row.id) {
+      Object.assign(detailForm, newItem(detail))
+      detailBaseline.value = detailSnapshot(detailForm)
+    }
+  } catch (error) {
+    ElMessage.error(error.message || '加载配置详情失败')
   }
 }
 
-function selectItem(row) {
-  selectedItem.value = row
-  tableRef.value?.setCurrentRow(row)
-}
-
-async function openItemCreate() {
-  Object.assign(itemForm, newItem({ namespaceId: namespaces.value[0]?.id ?? null }))
+async function openItemCreate(directoryPath = '') {
+  if (!activeNamespaceId.value) {
+    ElMessage.warning('请先创建并选择空间')
+    return
+  }
+  Object.assign(itemForm, newItem({ namespaceId: activeNamespaceId.value, itemKey: directoryPath ? `${directoryPath}:` : '' }))
   itemEditorMode.value = 'create'
   valueError.value = ''
+  keyTouched.value = false
   itemEditorVisible.value = true
   await nextTick()
   itemFormRef.value?.clearValidate()
@@ -279,38 +317,163 @@ async function openItemCreate() {
 
 async function openItemEdit(row) {
   if (!row) return
+  await selectItem(row)
+  document.querySelector('.details-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+async function openNamespaceCreate() {
+  Object.assign(namespaceForm, newNamespace())
+  namespaceEditorMode.value = 'create'
+  namespaceDialogVisible.value = true
+  await nextTick()
+  namespaceFormRef.value?.clearValidate()
+}
+
+async function openNamespaceEdit(space) {
+  if (!space) return
+  Object.assign(namespaceForm, newNamespace(space))
+  namespaceEditorMode.value = 'edit'
+  namespaceDialogVisible.value = true
+  await nextTick()
+  namespaceFormRef.value?.clearValidate()
+}
+
+function resetNamespaceDraft() {
+  Object.assign(namespaceForm, newNamespace())
+}
+
+async function submitNamespace() {
   try {
-    Object.assign(itemForm, newItem(await fetchItemDetail(row.id)))
-    if (!['STRING', 'INTEGER', 'BOOLEAN'].includes(itemForm.valueType)) {
-      ElMessage.warning('该历史配置使用了已退役的数据类型，请先迁移为字符串、整数或布尔值。')
+    await namespaceFormRef.value?.validate()
+    namespaceSaving.value = true
+    const created = namespaceEditorMode.value === 'create'
+    const savedCode = namespaceForm.namespaceCode
+    const savedEnv = namespaceForm.env
+    await saveNamespace({ ...namespaceForm, directoryMode: 'KEY_PROJECTION' })
+    namespaceDialogVisible.value = false
+    await loadNamespaces()
+    if (created) {
+      const saved = namespaces.value.find((space) => space.namespaceCode === savedCode && space.env === savedEnv)
+      if (saved) await switchNamespace(saved.id)
     }
-    itemEditorMode.value = 'edit'
-    valueError.value = ''
-    itemEditorVisible.value = true
-    await nextTick()
-    itemFormRef.value?.clearValidate()
+    if (!created) ElMessage.success('空间已保存')
   } catch (error) {
-    ElMessage.error(error.message || '加载配置详情失败')
+    if (error?.message) ElMessage.error(error.message)
+  } finally {
+    namespaceSaving.value = false
   }
 }
 
+async function confirmNamespaceDelete(space) {
+  if (!space) return
+  try {
+    await ElMessageBox.confirm(`确定删除空间“${space.displayName}”吗？空间内仍有配置或目录时无法删除。`, '删除空间', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+    await deleteNamespace(space.id)
+    if (space.id === activeNamespaceId.value) activeNamespaceId.value = null
+    await loadNamespaces()
+    selectedNode.value = undefined
+    selectedItem.value = undefined
+    await loadItems()
+    ElMessage.success('空间已删除')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message || '删除空间失败')
+  }
+}
+
+function isJsonContainer(value) {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed !== null && typeof parsed === 'object'
+  } catch {
+    return false
+  }
+}
+
+function handleItemJsonValidation(valid) {
+  if (itemForm.valueType === 'JSON') valueError.value = valid ? '' : 'JSON 配置值必须是合法的对象或数组。'
+}
+
+function handleDetailJsonValidation(valid) {
+  if (detailForm.valueType === 'JSON') detailValueError.value = valid || detailForm.itemValue == null || detailForm.itemValue === '' ? '' : 'JSON 配置值必须是合法的对象或数组。'
+}
+
 function validateValue() {
-  const checks = [itemForm.itemValue, itemForm.defaultValue].filter((value) => value !== null && value !== undefined && value !== '')
+  const checks = [itemForm.itemValue].filter((value) => value !== null && value !== undefined && value !== '')
   if (itemForm.valueType === 'INTEGER') valueError.value = checks.every((value) => /^-?(0|[1-9]\d*)$/.test(value)) ? '' : '当前值无法转换为整数。'
   else if (itemForm.valueType === 'BOOLEAN') valueError.value = checks.every((value) => value === 'true' || value === 'false') ? '' : '布尔值只能为 true 或 false。'
+  else if (itemForm.valueType === 'JSON') valueError.value = isJsonContainer(itemForm.itemValue) ? '' : 'JSON 配置值必须是合法的对象或数组。'
   else valueError.value = ''
 }
 
-async function submitItem() {
+function validateDetailValue() {
+  if (detailForm.itemValue == null || detailForm.itemValue === '') {
+    detailValueError.value = ''
+    return
+  }
+  const checks = [detailForm.itemValue].filter((value) => value !== null && value !== undefined && value !== '')
+  if (detailForm.valueType === 'INTEGER') detailValueError.value = checks.every((value) => /^-?(0|[1-9]\d*)$/.test(value)) ? '' : '当前值无法转换为整数。'
+  else if (detailForm.valueType === 'BOOLEAN') detailValueError.value = checks.every((value) => value === 'true' || value === 'false') ? '' : '布尔值只能为 true 或 false。'
+  else if (detailForm.valueType === 'JSON') detailValueError.value = isJsonContainer(detailForm.itemValue) ? '' : 'JSON 配置值必须是合法的对象或数组。'
+  else detailValueError.value = ''
+}
+
+function restrictDetailValue(value) {
+  const rawValue = String(value ?? '')
+  if (detailForm.valueType === 'INTEGER') {
+    detailForm.itemValue = rawValue.replace(/[^\d-]/g, '').replace(/(?!^)-/g, '')
+    return
+  }
+  if (detailForm.valueType === 'BOOLEAN') {
+    const normalized = rawValue.toLowerCase()
+    detailForm.itemValue = ['', 't', 'tr', 'tru', 'true', 'f', 'fa', 'fal', 'fals', 'false'].includes(normalized) ? normalized : ''
+  }
+}
+
+async function submitDetail() {
+  if (!detailForm.id || !detailChanged.value) return
   try {
-    validateValue()
+    validateDetailValue()
+    await detailFormRef.value?.validate()
+    if (detailValueError.value) return
+    detailSaving.value = true
+    const savedDetail = newItem(detailForm)
+    await saveItem(savedDetail)
+    Object.assign(detailForm, savedDetail)
+    selectedItem.value = { ...selectedItem.value, ...savedDetail }
+    const index = items.value.findIndex((item) => item.id === savedDetail.id)
+    if (index >= 0) items.value[index] = selectedItem.value
+    detailBaseline.value = detailSnapshot(detailForm)
+  } catch (error) {
+    if (error?.message) ElMessage.error(error.message)
+  } finally {
+    detailSaving.value = false
+  }
+}
+
+async function continueItemCreate() {
+  try {
+    keyTouched.value = true
     await itemFormRef.value?.validate()
-    if (valueError.value) return
+    if (!keyPattern.test(itemForm.itemKey || '')) return
     itemSaving.value = true
-    await saveItem({ ...itemForm })
+    const draftItem = {
+      ...newItem({
+      namespaceId: itemForm.namespaceId,
+      itemKey: itemForm.itemKey,
+      valueType: itemForm.valueType,
+      status: 'ENABLED',
+      description: ''
+      }),
+      itemValue: null
+    }
+    await saveItem(draftItem)
+    await reloadWorkspace(true)
+    const createdItem = items.value.find((item) => item.namespaceId === draftItem.namespaceId && item.itemKey === draftItem.itemKey)
+    if (createdItem) {
+      await selectItem(createdItem)
+      treeRef.value?.selectItemKey(createdItem.id)
+    }
     itemEditorVisible.value = false
-    await reloadWorkspace()
-    ElMessage.success(itemEditorMode.value === 'create' ? '配置已创建' : '配置已保存')
   } catch (error) {
     if (error?.message) ElMessage.error(error.message)
   } finally {
@@ -326,6 +489,7 @@ async function setStatus(status) {
     selectedItem.value = { ...detail, status }
     const index = items.value.findIndex((item) => item.id === detail.id)
     if (index >= 0) items.value[index] = selectedItem.value
+    if (detailForm.id === detail.id) Object.assign(detailForm, newItem(selectedItem.value))
     ElMessage.success(status === 'ENABLED' ? '配置已启用' : '配置已停用')
   } catch (error) {
     ElMessage.error(error.message || '更新配置状态失败')
@@ -346,83 +510,62 @@ async function confirmItemDelete(row) {
   }
 }
 
-async function copyKey() {
-  if (!selectedItem.value) return
-  try { await navigator.clipboard.writeText(selectedItem.value.itemKey); ElMessage.success('完整 Key 已复制') } catch { ElMessage.warning('浏览器未授予剪贴板权限') }
+async function copyKey(row = selectedItem.value) {
+  if (!row) return
+  try { await navigator.clipboard.writeText(row.itemKey); ElMessage.success('完整 Key 已复制') } catch { ElMessage.warning('浏览器未授予剪贴板权限') }
 }
 
-function handleMoreCommand(command) {
-  if (command === 'copy') void copyKey()
-  if (command === 'namespaces') ElMessage.info(`当前共 ${namespaces.value.length} 个命名空间；新建配置时可选择归属命名空间。`)
+function itemForTreeNode(node) {
+  return items.value.find((item) => item.id === node?.itemId)
 }
-function notImplemented(name) { ElMessage.info(`${name}功能将在后续版本提供。`) }
+function openTreeItemEdit(node) {
+  const row = itemForTreeNode(node)
+  if (row) void openItemEdit(row)
+}
+function copyTreeItemKey(node) {
+  void copyKey(itemForTreeNode(node))
+}
+function setTreeItemStatus(node, status) {
+  const row = itemForTreeNode(node)
+  if (!row) return
+  selectItem(row)
+  void setStatus(status)
+}
+function deleteTreeItem(node) {
+  const row = itemForTreeNode(node)
+  if (row) void confirmItemDelete(row)
+}
+
 function handleShortcut(event) {
   if (event.ctrlKey && event.key.toLowerCase() === 'f') { event.preventDefault(); topSearchRef.value?.focus() }
-  if (event.ctrlKey && event.key.toLowerCase() === 's' && selectedItem.value) { event.preventDefault(); void openItemEdit(selectedItem.value) }
-  if (event.key === 'Delete' && selectedItem.value && !itemEditorVisible.value) { event.preventDefault(); void confirmItemDelete(selectedItem.value) }
+  if (event.ctrlKey && event.key.toLowerCase() === 's' && selectedItem.value && !itemEditorVisible.value && !namespaceDialogVisible.value) { event.preventDefault(); void submitDetail() }
+  if (event.key === 'Delete' && selectedItem.value && !itemEditorVisible.value && !namespaceDialogVisible.value) { event.preventDefault(); void confirmItemDelete(selectedItem.value) }
 }
-function namespaceLabel(namespace) { return `${namespace.displayName} (${namespace.namespaceCode} / ${namespace.env})` }
-function typeLabel(type) { return ({ STRING: '字符串', INTEGER: '整数', BOOLEAN: '布尔' })[type] || type }
+function namespaceLabel(namespace) { return namespace ? `${namespace.displayName} (${namespace.namespaceCode} / ${namespace.env})` : '' }
+function onSidebarSizeChange(size) {
+  const width = Math.round(Number(size) - 28)
+  if (!Number.isFinite(width)) return
+  sidebarWidth.value = Math.max(width, minimumSidebarWidth())
+  localStorage.setItem('config.sidebar-width-v2', String(sidebarWidth.value))
+}
+function typeLabel(type) { return ({ STRING: '字符串', INTEGER: '整数', BOOLEAN: '布尔', JSON: 'JSON' })[type] || type }
 function formatTime(value) { return value ? new Date(value).toLocaleString('sv-SE').replace('T', ' ') : '—' }
 function newItem(source = {}) { return { id: source.id ?? null, namespaceId: source.namespaceId ?? null, directoryId: null, itemKey: source.itemKey ?? '', itemValue: source.itemValue ?? '', defaultValue: source.defaultValue ?? '', valueType: source.valueType ?? 'STRING', status: source.status ?? 'ENABLED', description: source.description ?? '' } }
+function detailSnapshot(item) { return JSON.stringify({ itemValue: item.itemValue ?? '', status: item.status ?? 'ENABLED', description: item.description ?? '' }) }
+function newNamespace(source = {}) { return { id: source.id ?? null, namespaceCode: source.namespaceCode ?? '', env: source.env ?? 'prod', displayName: source.displayName ?? '', description: source.description ?? '', directoryMode: 'KEY_PROJECTION' } }
 
-function buildKeyTree(source) {
-  const roots = [], directories = new Map()
-  for (const item of source) {
-    const parts = item.itemKey.split(':')
-    let children = roots
-    let path = ''
-    parts.forEach((part, index) => {
-      path = path ? `${path}:${part}` : part
-      if (index === parts.length - 1) {
-        children.push({ nodeKey: `item:${item.id}`, label: part, path, kind: 'item', itemId: item.id, itemCount: 1, fullKey: item.itemKey, children: [] })
-        return
-      }
-      let node = directories.get(path)
-      if (!node) {
-        node = { nodeKey: `directory:${path}`, label: part, path, kind: 'directory', itemIds: [], itemCount: 0, children: [] }
-        directories.set(path, node)
-        children.push(node)
-      }
-      node.itemIds.push(item.id)
-      node.itemCount++
-      children = node.children
-    })
-  }
-  return roots
-}
-
-function filterTree(nodes, rawKeyword) {
-  const query = rawKeyword.trim().toLowerCase()
-  if (!query) return nodes
-  return nodes.reduce((result, node) => {
-    const children = filterTree(node.children || [], query)
-    if (node.label.toLowerCase().includes(query) || node.fullKey?.toLowerCase().includes(query) || children.length) result.push({ ...node, children })
-    return result
-  }, [])
-}
-
-function findTreeNode(nodes, key) {
-  for (const node of nodes) {
-    if (node.nodeKey === key) return node
-    const match = findTreeNode(node.children || [], key)
-    if (match) return match
-  }
-}
 </script>
 
 <style scoped>
-.config-manager { display: grid; grid-template-columns: 282px minmax(0, 1fr); min-height: calc(100vh - 40px); background: var(--shell-tool-surface); color: var(--shell-text-primary); border-top: 1px solid var(--shell-tool-divider); font-size: 13px; }
-.resource-explorer { display: flex; min-width: 0; flex-direction: column; background: var(--shell-tool-surface-muted); border-right: 1px solid var(--shell-tool-divider); }
-.explorer-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 16px 13px; }.eyebrow { margin: 0 0 4px; color: var(--shell-accent); font-family: Consolas, monospace; font-size: 10px; letter-spacing: .12em; }.explorer-header h2 { margin: 0; color: var(--shell-tool-header-text); font-size: 14px; font-weight: 650; }.item-total { min-width: 30px; padding: 3px 7px; border-radius: 4px; background: var(--shell-tool-tag-bg); color: var(--shell-tool-subtle-text); font-family: Consolas, monospace; font-size: 11px; text-align: center; }
-.tree-search { padding: 0 14px; }.tree-search :deep(.el-input__wrapper), .search-actions :deep(.el-input__wrapper) { background: var(--shell-tool-toolbar-bg); box-shadow: 0 0 0 1px var(--shell-tool-border-strong) inset; border-radius: 4px; }.search-glyph { color: var(--shell-tool-subtle-text); font-size: 19px; line-height: 1; }.tree-caption { display: flex; justify-content: space-between; margin: 18px 16px 7px; color: var(--shell-tool-subtle-text); font-size: 11px; font-weight: 600; }.tree-caption span:last-child { font-weight: 400; }
-.key-tree { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 12px; background: transparent; color: var(--shell-text-primary); --el-tree-node-hover-bg-color: var(--shell-tool-hover); }.key-tree :deep(.el-tree-node__content) { height: 27px; border-radius: 4px; }.key-tree :deep(.el-tree-node__expand-icon) { color: var(--shell-tool-subtle-text); font-size: 12px; }.key-tree :deep(.is-current > .el-tree-node__content) { background: var(--shell-tool-selected-bg); color: var(--shell-accent); }.tree-node, .tree-node-main { display: flex; align-items: center; }.tree-node { width: 100%; justify-content: space-between; gap: 8px; }.tree-node-main { min-width: 0; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.tree-icon { width: 13px; color: #d6a153; font-size: 11px; }.tree-node.is-key .tree-icon { color: var(--shell-accent); font-size: 10px; }.tree-node small { min-width: 22px; padding: 1px 5px; border-radius: 3px; background: var(--shell-tool-tag-bg); color: var(--shell-text-muted); font-size: 10px; text-align: center; }
-.explorer-footer { display: flex; gap: 4px; padding: 10px 10px; border-top: 1px solid var(--shell-tool-divider); }.explorer-footer :deep(.el-button) { margin: 0; padding: 5px; color: var(--shell-text-secondary); font-size: 12px; }.button-glyph { margin-right: 3px; font-size: 15px; }.config-workspace { display: grid; min-width: 0; grid-template-rows: 62px 42px minmax(310px, 1fr) minmax(305px, .82fr); }
-.workspace-toolbar, .breadcrumb-bar, .list-section, .details-section { min-width: 0; }.workspace-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 16px; border-bottom: 1px solid var(--shell-tool-divider); background: var(--shell-tool-surface); }.toolbar-actions, .search-actions { display: flex; align-items: center; gap: 6px; }.toolbar-actions { min-width: 0; overflow: auto; }.toolbar-actions :deep(.el-button), .search-actions :deep(.el-button) { min-height: 30px; margin: 0; border-radius: 4px; font-size: 12px; white-space: nowrap; }.toolbar-divider { width: 1px; height: 20px; margin: 0 3px; background: var(--shell-tool-divider); }.search-actions { flex: 0 0 auto; }.search-actions :deep(.el-input) { width: 248px; }.search-actions :deep(.el-button) { width: 30px; padding: 0; font-size: 16px; }
-.breadcrumb-bar { display: flex; align-items: center; gap: 7px; padding: 0 16px; border-bottom: 1px solid var(--shell-tool-divider); background: var(--shell-tool-toolbar-bg); color: var(--shell-tool-subtle-text); font-size: 12px; }.breadcrumb-bar button { padding: 3px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--shell-text-secondary); cursor: pointer; }.breadcrumb-bar button:hover, .breadcrumb-bar button.active { background: var(--shell-tool-hover); color: var(--shell-accent); }.breadcrumb-separator { color: var(--shell-text-muted); font-size: 16px; }
-.list-section { display: flex; min-height: 0; flex-direction: column; padding: 0 16px; border-bottom: 1px solid var(--shell-tool-divider); }.items-table { flex: 1; --el-table-border-color: var(--shell-tool-divider); --el-table-header-bg-color: var(--shell-tool-toolbar-bg); --el-table-tr-bg-color: transparent; --el-table-row-hover-bg-color: var(--shell-tool-hover); --el-table-current-row-bg-color: var(--shell-tool-selected-bg); font-size: 12px; }.items-table :deep(th.el-table__cell) { height: 40px; padding: 0; color: var(--shell-tool-subtle-text); font-size: 12px; font-weight: 600; }.items-table :deep(.el-table__cell) { height: 37px; padding: 0; }.items-table :deep(.code-cell .cell) { font-family: Consolas, "JetBrains Mono", monospace; }.items-table :deep(.el-table__inner-wrapper::before) { height: 0; }.item-key { color: var(--shell-text-primary); }.value-preview, .description-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.value-preview { font-family: Consolas, "JetBrains Mono", monospace; }.description-cell { color: var(--shell-text-secondary); }.type-tag, .status-tag { display: inline-flex; align-items: center; min-height: 21px; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; line-height: 1.4; }.type-string { background: color-mix(in srgb, #8a6fd4 22%, transparent); color: #9f8be8; }.type-integer { background: color-mix(in srgb, #4b92dc 22%, transparent); color: #6ba9e9; }.type-boolean { background: color-mix(in srgb, #76a64f 22%, transparent); color: #92c66b; }.status-tag { gap: 5px; background: color-mix(in srgb, var(--shell-accent) 15%, transparent); color: var(--shell-accent); }.status-tag i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }.status-tag.disabled { background: color-mix(in srgb, #a0a7b1 16%, transparent); color: var(--shell-text-muted); }.table-footer { display: flex; align-items: center; justify-content: space-between; height: 48px; color: var(--shell-text-secondary); font-size: 12px; }.table-footer div { display: flex; align-items: center; gap: 8px; }.table-footer button { width: 25px; height: 25px; border: 1px solid var(--shell-tool-border-strong); border-radius: 3px; background: var(--shell-tool-surface); color: var(--shell-text-secondary); cursor: pointer; }.table-footer button.current-page { border-color: var(--shell-accent); color: var(--shell-accent); }
-.details-section { min-height: 0; padding: 0 16px 12px; overflow: auto; background: var(--shell-tool-surface-muted); }.details-title { display: flex; align-items: center; gap: 8px; height: 44px; color: var(--shell-tool-header-text); font-size: 13px; font-weight: 650; }.accent-line { width: 2px; height: 17px; background: var(--shell-accent); }.details-empty { color: var(--shell-text-muted); font-size: 12px; font-weight: 400; }.details-grid { display: grid; grid-template-columns: minmax(510px, 1.16fr) minmax(340px, .84fr); gap: 14px; }.detail-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; padding-right: 4px; }.detail-field { min-width: 0; }.detail-field.wide { grid-column: 1 / -1; }.detail-field label { display: block; margin-bottom: 6px; color: var(--shell-text-secondary); font-size: 12px; }.read-value { display: flex; min-height: 31px; align-items: center; padding: 5px 10px; overflow: hidden; border: 1px solid var(--shell-tool-border-strong); border-radius: 4px; background: var(--shell-tool-surface); color: var(--shell-text-primary); }.code-value { justify-content: space-between; font-family: Consolas, "JetBrains Mono", monospace; }.code-value span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.code-value button { padding: 0 0 0 10px; border: 0; background: transparent; color: var(--shell-text-secondary); cursor: pointer; font-size: 16px; }.detail-field :deep(.el-radio) { margin-right: 14px; }.key-guide { padding: 0 0 0 14px; border-left: 1px solid var(--shell-tool-divider); }.guide-title { margin: 0 0 9px; color: var(--shell-text-secondary); font-size: 12px; }.path-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }.path-chips span { padding: 4px 9px; border: 1px solid var(--shell-tool-border-strong); border-radius: 3px; background: var(--shell-tool-surface); font-family: Consolas, monospace; font-size: 11px; }.guide-card { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--shell-tool-divider); border-radius: 4px; background: color-mix(in srgb, var(--shell-tool-surface) 80%, transparent); color: var(--shell-text-secondary); font-size: 11px; line-height: 1.55; }.guide-card strong { color: var(--shell-text-primary); font-size: 12px; }.guide-card ol { margin: 6px 0; padding-left: 17px; }.guide-card p { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; }.guide-card code { color: var(--shell-accent); }
-.key-preview { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 7px; color: var(--shell-tool-subtle-text); font-size: 11px; }.value-error { margin: -5px 0 12px; }.drawer-footer { display: flex; justify-content: flex-end; gap: 8px; }.el-input-number { width: 100%; }
-@media (max-width: 1120px) { .config-workspace { grid-template-rows: 62px 42px minmax(310px, 1fr) auto; }.details-grid { grid-template-columns: 1fr; }.key-guide { padding: 12px 0 0; border-top: 1px solid var(--shell-tool-divider); border-left: 0; }.search-actions :deep(.el-input) { width: 180px; } }
-@media (max-width: 860px) { .config-manager { grid-template-columns: 1fr; }.resource-explorer { max-height: 280px; border-right: 0; border-bottom: 1px solid var(--shell-tool-divider); }.config-workspace { grid-template-rows: auto 42px 370px auto; }.workspace-toolbar { align-items: flex-start; flex-direction: column; }.toolbar-actions { width: 100%; }.search-actions { width: 100%; }.search-actions :deep(.el-input) { flex: 1; width: auto; }.detail-form { grid-template-columns: 1fr; }.detail-field.wide { grid-column: auto; } }
+.config-manager { min-height: calc(100vh - 40px); height: calc(100vh - 40px); overflow: hidden; background: var(--shell-tool-surface); color: var(--shell-text-primary); border-top: 1px solid var(--shell-tool-divider); font-size: 12px; }.config-splitter { width: 100%; height: 100%; min-width: 0; min-height: 0; }.config-splitter :deep(.el-splitter-panel) { min-width: 0; min-height: 0; }.config-splitter :deep(.el-splitter-bar__dragger-horizontal:before) { width: 1px; background: var(--shell-tool-divider); }.config-splitter :deep(.el-splitter-bar__dragger-horizontal:hover:not(.is-disabled):before) { width: 2px; background: var(--shell-accent); }.config-splitter :deep(.el-splitter-bar) { background: var(--shell-tool-surface-muted); }
+.resource-explorer { display: grid; height: 100%; min-width: 0; grid-template-columns: 28px minmax(0, 1fr); background: var(--shell-tool-surface-muted); }.tool-rail { display: flex; flex-direction: column; align-items: center; border-right: 1px solid var(--shell-tool-divider); background: var(--shell-tool-surface-muted); }.tool-rail button { display: grid; width: 26px; height: 56px; flex: 0 0 auto; place-items: center; padding: 11px 0; border: 0; border-bottom: 1px solid var(--shell-tool-divider); border-radius: 0; background: transparent; color: var(--shell-tool-subtle-text); cursor: pointer; font: 11px/1 var(--shell-font-sans, "Segoe UI", sans-serif); writing-mode: vertical-rl; }.tool-rail button:hover { background: var(--shell-tool-hover); color: var(--shell-text-primary); }.tool-rail button.active { background: var(--shell-tool-surface); color: var(--shell-accent); box-shadow: inset 2px 0 var(--shell-accent); }.sidebar-content, .side-panel-splitter { display: flex; width: 100%; min-width: 0; min-height: 0; }.side-panel-splitter :deep(.el-splitter-panel) { min-width: 0; min-height: 0; }.side-panel-splitter :deep(.el-splitter-bar__dragger-horizontal:before) { width: 1px; background: var(--shell-tool-divider); }.side-panel-splitter :deep(.el-splitter-bar__dragger-horizontal:hover:not(.is-disabled):before) { width: 2px; background: var(--shell-accent); }
+.button-glyph { margin-right: 2px; font-size: 14px; }.config-workspace { display: grid; width: 100%; height: 100%; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+.workspace-toolbar, .breadcrumb-bar, .list-section, .details-section { min-width: 0; }.workspace-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--shell-tool-divider); background: var(--shell-tool-surface); }.toolbar-actions, .search-actions { display: flex; align-items: center; gap: 4px; }.toolbar-actions { min-width: 0; overflow: auto; }.toolbar-actions :deep(.el-button), .search-actions :deep(.el-button) { min-height: 26px; margin: 0; border-radius: 3px; font-size: 11px; white-space: nowrap; }.toolbar-divider { width: 1px; height: 17px; margin: 0 2px; background: var(--shell-tool-divider); }.search-actions { flex: 0 0 auto; }.search-actions :deep(.el-input) { width: 200px; }.search-actions :deep(.el-button) { width: 26px; padding: 0; font-size: 13px; }
+.breadcrumb-bar { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 1px solid var(--shell-tool-divider); background: var(--shell-tool-toolbar-bg); color: var(--shell-tool-subtle-text); font-size: 11px; }.breadcrumb-bar button { padding: 2px 3px; border: 0; border-radius: 3px; background: transparent; color: var(--shell-text-secondary); cursor: pointer; }.breadcrumb-bar button:hover, .breadcrumb-bar button.active { background: var(--shell-tool-hover); color: var(--shell-accent); }.breadcrumb-separator { color: var(--shell-text-muted); font-size: 14px; }
+.list-section { display: flex; min-height: 0; flex-direction: column; padding: 0 12px; border-bottom: 1px solid var(--shell-tool-divider); }.items-table { flex: 1; --el-table-border-color: var(--shell-tool-divider); --el-table-header-bg-color: var(--shell-tool-toolbar-bg); --el-table-tr-bg-color: transparent; --el-table-row-hover-bg-color: var(--shell-tool-hover); --el-table-current-row-bg-color: var(--shell-tool-selected-bg); font-size: 11px; }.items-table :deep(th.el-table__cell) { height: 34px; padding: 0; color: var(--shell-tool-subtle-text); font-size: 11px; font-weight: 600; }.items-table :deep(.el-table__cell) { height: 33px; padding: 0; }.items-table :deep(.code-cell .cell) { font-family: Consolas, "JetBrains Mono", monospace; }.items-table :deep(.el-table__inner-wrapper::before) { height: 0; }.item-key { color: var(--shell-text-primary); }.value-preview, .description-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.value-preview { font-family: Consolas, "JetBrains Mono", monospace; }.description-cell { color: var(--shell-text-secondary); }.type-tag, .status-tag { display: inline-flex; align-items: center; min-height: 19px; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 600; line-height: 1.35; }.type-string { background: color-mix(in srgb, #8a6fd4 22%, transparent); color: #9f8be8; }.type-integer { background: color-mix(in srgb, #4b92dc 22%, transparent); color: #6ba9e9; }.type-boolean { background: color-mix(in srgb, #76a64f 22%, transparent); color: #92c66b; }.status-tag { gap: 4px; background: color-mix(in srgb, var(--shell-accent) 15%, transparent); color: var(--shell-accent); }.status-tag i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }.status-tag.disabled { background: color-mix(in srgb, #a0a7b1 16%, transparent); color: var(--shell-text-muted); }.table-footer { display: flex; align-items: center; justify-content: space-between; height: 38px; color: var(--shell-text-secondary); font-size: 11px; }.table-footer div { display: flex; align-items: center; gap: 6px; }.table-footer button { width: 22px; height: 22px; border: 1px solid var(--shell-tool-border-strong); border-radius: 3px; background: var(--shell-tool-surface); color: var(--shell-text-secondary); cursor: pointer; }.table-footer button.current-page { border-color: var(--shell-accent); color: var(--shell-accent); }
+.details-section { display: flex; min-height: 0; flex-direction: column; padding: 0 20px 20px; overflow: auto; background: var(--shell-tool-surface-muted); }.details-title { display: flex; align-items: center; gap: 7px; height: 48px; flex: 0 0 auto; border-bottom: 1px solid var(--shell-tool-divider); color: var(--shell-tool-header-text); font-size: 13px; font-weight: 650; }.details-title :deep(.detail-delete-button) { margin-left: auto; }.accent-line { width: 2px; height: 16px; background: var(--shell-accent); }.details-empty { color: var(--shell-text-muted); font-size: 11px; font-weight: 400; }.detail-editor { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; padding: 20px 0; }.detail-editor :deep(.el-form-item) { min-width: 0; margin-bottom: 0; }.detail-editor :deep(.el-form-item.wide), .detail-editor :deep(.detail-value-error), .value-editor-block { grid-column: 1 / -1; }.detail-editor :deep(.el-form-item__label) { padding-bottom: 5px; color: var(--shell-text-secondary); font-size: 11px; line-height: 1.3; }.detail-editor :deep(.el-select), .detail-editor :deep(.el-input-number) { width: 100%; }.detail-editor :deep(.el-radio) { margin-right: 14px; }.detail-editor :deep(.el-input__wrapper), .detail-editor :deep(.el-textarea__inner), .detail-editor :deep(.el-select__wrapper) { border-radius: 3px; }.value-editor-block { min-width: 0; min-height: 360px; padding: 14px; border: 1px solid var(--shell-tool-divider); border-radius: 5px; background: var(--shell-tool-surface); }.value-editor-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: var(--shell-text-primary); font-size: 12px; font-weight: 650; }.value-editor-heading small { color: var(--shell-text-muted); font-size: 10px; font-weight: 400; }.value-editor-block :deep(.el-form-item) { margin: 0; }.value-editor-block :deep(.el-input-number) { width: min(420px, 100%); }.value-editor-block :deep(.el-textarea__inner) { min-height: 300px; padding: 11px 12px; font-family: Consolas, "JetBrains Mono", monospace; font-size: 12px; line-height: 1.6; }.copy-key-button { padding: 0; border: 0; background: transparent; color: var(--shell-text-secondary); cursor: pointer; font-size: 14px; }.copy-key-button:hover { color: var(--shell-accent); }.detail-value-error { margin-top: 1px; }.key-preview { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; color: var(--shell-tool-subtle-text); font-size: 10px; }
+.detail-editor { grid-template-columns: minmax(150px, 3fr) minmax(0, 7fr); }.draft-indicator, .modified-indicator { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }.draft-indicator { background: #e6a23c; box-shadow: 0 0 0 3px color-mix(in srgb, #e6a23c 17%, transparent); }.modified-indicator { background: var(--shell-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--shell-accent) 17%, transparent); }.detail-space-inline { margin-left: 7px; overflow: hidden; color: var(--shell-text-secondary); font-size: 11px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }.key-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; color: var(--shell-tool-subtle-text); font-size: 10px; }.item-editor-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }.item-editor-form :deep(.el-form-item) { min-width: 0; margin: 0; }.item-editor-form :deep(.wide) { grid-column: auto; }.item-editor-form :deep(.space-field) { width: min(275px, 100%); }.item-editor-form :deep(.el-form-item__label) { padding-bottom: 3px; font-size: 10px; line-height: 1.2; }.item-editor-form :deep(.el-select), .item-editor-form :deep(.el-input-number) { width: 100%; }.item-editor-form :deep(.el-input__wrapper), .item-editor-form :deep(.el-textarea__inner), .item-editor-form :deep(.el-select__wrapper) { border-radius: 4px; font-size: 11px; }.item-editor-form :deep(.el-input__wrapper), .item-editor-form :deep(.el-select__wrapper) { min-height: 28px; }.item-editor-form :deep(.space-field .el-input__inner) { color: var(--shell-text-secondary); font-size: 10px; }.item-editor-form :deep(.item-value-field .el-textarea__inner) { min-height: 104px; font-family: Consolas, "JetBrains Mono", monospace; font-size: 11px; line-height: 1.5; }.value-error { margin: -3px 0 0; }.drawer-footer { display: flex; justify-content: flex-end; gap: 8px; }.el-input-number { width: 100%; }.config-editor-dialog :deep(.el-dialog__body) { max-height: min(620px, calc(100vh - 210px)); padding-top: 8px; overflow-y: auto; }.item-editor-dialog :deep(.el-dialog__header) { display: none; }.item-editor-dialog :deep(.el-dialog__body) { padding: 16px 18px 12px; }
+.value-editor-block :deep(.el-form-item__content), .item-value-field :deep(.el-form-item__content) { display: block; width: 100%; min-width: 0; }.value-editor-block :deep(.json-editor), .item-value-field :deep(.json-editor) { width: 100%; }.item-editor-form { grid-template-columns: minmax(0, 1fr); align-items: center; gap: 8px; }.item-editor-form :deep(.el-form-item__label) { align-self: start; padding-top: 7px; text-align: right; }.create-key-hint { margin-top: 4px; color: var(--shell-text-muted); font-size: 10px; line-height: 1.25; }.create-key-hint.invalid { color: var(--el-color-danger, #d14d4d); }
+@media (max-width: 1120px) { .detail-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .config-manager { height: auto; min-height: calc(100vh - 40px); overflow: visible; }.config-splitter { height: auto; min-height: calc(100vh - 40px); }.config-splitter :deep(.el-splitter-panel:first-child), .config-splitter :deep(.el-splitter-bar) { display: none; }.resource-explorer { display: none; }.details-section { min-height: calc(100vh - 40px); padding: 0 12px 16px; }.detail-editor, .item-editor-form { grid-template-columns: 1fr; }.detail-editor :deep(.el-form-item.wide), .detail-editor :deep(.detail-value-error), .item-editor-form :deep(.wide) { grid-column: auto; } }
 </style>

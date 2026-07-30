@@ -7,7 +7,12 @@ import {
 const remoteRegistrationState = new Map()
 
 function buildRemoteConfig(remoteEntry) {
-  return { url: remoteEntry, format: 'esm', from: 'vite' }
+  if (!import.meta.env.DEV) {
+    return { url: remoteEntry, format: 'esm', from: 'vite' }
+  }
+
+  const separator = remoteEntry.includes('?') ? '&' : '?'
+  return { url: `${remoteEntry}${separator}t=${Date.now()}`, format: 'esm', from: 'vite' }
 }
 
 async function ensureRemoteRegistered(remoteName, remoteEntry) {

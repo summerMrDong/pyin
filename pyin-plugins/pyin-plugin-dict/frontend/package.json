@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:embedded": "vite build --watch --mode embedded-watch",
     "build": "vite build"
   },
   "dependencies": {

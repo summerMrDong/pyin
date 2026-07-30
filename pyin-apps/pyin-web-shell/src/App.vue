@@ -102,7 +102,9 @@ async function handleLogout() {
 .desktop-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--shell-app-bg);
   color: var(--shell-text-primary);
 }
@@ -261,6 +263,7 @@ async function handleLogout() {
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .workspace-loading {

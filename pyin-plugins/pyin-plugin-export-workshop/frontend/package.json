@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:embedded": "vite build --watch --mode embedded-watch",
     "build": "vue-tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@imengyu/vue3-context-menu": "^1.5.6",
     "@univerjs/core": "0.25.1",
     "@univerjs/design": "0.25.1",
     "@univerjs/docs": "0.25.1",
@@ -17,6 +19,7 @@
     "@univerjs/sheets-numfmt-ui": "0.25.1",
     "@univerjs/sheets-ui": "0.25.1",
     "@univerjs/ui": "0.25.1",
+    "element-plus": "^2.14.2",
     "exceljs": "4.4.0",
     "monaco-editor": "0.56.0",
     "pinia": "^2.1.7",

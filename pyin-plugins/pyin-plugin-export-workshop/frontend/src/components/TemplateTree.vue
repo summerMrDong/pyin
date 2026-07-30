@@ -1,92 +1,145 @@
 <template>
-  <aside class="tree-panel" @click="closeMenus">
+  <aside class="tree-panel" @contextmenu="openRootContext">
     <header class="resource-header">
-      <div><strong>模板</strong><small>{{ templates.length }} 个</small></div>
-      <div class="command-group" @click.stop>
-        <button class="split-main" title="新建空白模板" @click="$emit('blank')"><span>＋</span>新建</button>
-        <button class="split-more" title="新建选项" @click="createOpen = !createOpen">⌄</button>
-        <div v-if="createOpen" class="command-menu">
-          <button @click="choose('blank')">▦ 新建空白模板</button>
-          <button @click="choose('folder')">▸ 新建目录</button>
-        </div>
-      </div>
-      <div class="menu-anchor" @click.stop>
-        <button class="icon-button" title="更多来源" @click="moreOpen = !moreOpen">···</button>
-        <div v-if="moreOpen" class="command-menu menu-right">
-          <button @click="fileInput?.click(); closeMenus()">⇧ 导入 XLSX / JSON</button>
-          <button @click="choose('local')">▣ 挂载本地目录</button>
-          <button @click="choose('network')">↗ 挂载网络模板</button>
-        </div>
-      </div>
+      <div><strong>资源</strong><small>{{ templates.length }}</small></div>
+      <small class="context-hint">右键管理</small>
     </header>
-    <input ref="fileInput" class="hidden" type="file" accept=".xlsx,.json" @change="upload" />
 
-    <div class="tree-content">
+    <div class="tree-content" @contextmenu="openRootContext">
       <div v-if="!nodes.length" class="empty">
         <strong>还没有模板</strong>
-        <span>新建一个空白模板，或通过右上角菜单导入已有文件。</span>
-        <button @click="$emit('blank')">新建模板</button>
+        <span>在此区域右键创建文件、目录或导入模板。</span>
       </div>
-      <div
-        v-for="entry in visibleNodes"
-        :key="entry.node.id"
-        class="tree-node"
-        :class="{ active: activeId === entry.node.id, directory: entry.node.nodeType === 'DIRECTORY' }"
-        :style="{ paddingLeft: `${8 + entry.depth * 14}px` }"
-        @click.stop="open(entry.node)"
-        @contextmenu.prevent.stop="openContext(entry.node, $event)"
+      <el-tree
+        ref="treeRef"
+        v-else
+        class="resource-tree"
+        :data="treeNodes"
+        node-key="id"
+        :props="treeProps"
+        :current-node-key="activeId"
+        default-expand-all
+        highlight-current
+        :expand-on-click-node="true"
+        @node-click="open"
+        @node-contextmenu="openNodeContext"
       >
-        <span class="node-icon">{{ iconFor(entry.node) }}</span>
-        <span class="node-name">{{ entry.node.name }}</span>
-        <small v-if="entry.node.nodeType === 'TEMPLATE'" :title="sourceLabel(entry.node.sourceType)">{{ sourceLabel(entry.node.sourceType) }}</small>
-        <span class="node-actions">
-          <button title="重命名" @click.stop="rename(entry.node)">✎</button>
-          <button title="删除" @click.stop="$emit('delete', entry.node.id)">×</button>
-        </span>
-      </div>
-    </div>
-
-    <div v-if="contextNode" class="context-menu" :style="{ left: `${contextPosition.x}px`, top: `${contextPosition.y}px` }" @click.stop>
-      <button @click="rename(contextNode)">重命名</button>
-      <button v-if="contextNode.readOnly" @click="fork(contextNode)">创建可编辑副本</button>
-      <button class="danger" @click="$emit('delete', contextNode.id); closeMenus()">删除</button>
+        <template #default="{ data }">
+          <span class="tree-node-content">
+            <el-icon class="node-icon" :class="data.nodeType === 'DIRECTORY' ? 'directory-icon' : 'template-icon'">
+              <Folder v-if="data.nodeType === 'DIRECTORY'" />
+              <Document v-else />
+            </el-icon>
+            <span class="node-name">{{ data.name }}</span>
+            <small v-if="data.nodeType === 'TEMPLATE'" :title="sourceLabel(data.sourceType)">{{ sourceLabel(data.sourceType) }}</small>
+          </span>
+        </template>
+      </el-tree>
     </div>
   </aside>
+
 </template>
 
 <script setup lang="ts">
+import { Document, Folder } from '@element-plus/icons-vue'
+import ContextMenu, { type MenuItem } from '@imengyu/vue3-context-menu'
+import '@imengyu/vue3-context-menu/lib/vue3-context-menu.css'
 import { computed, ref } from 'vue'
 
-const props = defineProps<{ nodes: any[]; activeId?: string }>()
-const emit = defineEmits(['open', 'blank', 'folder', 'upload', 'rename', 'delete', 'mount-network', 'mount-local', 'fork'])
-const fileInput = ref<HTMLInputElement>()
-const createOpen = ref(false); const moreOpen = ref(false)
-const contextNode = ref<any>(); const contextPosition = ref({ x: 0, y: 0 })
-const expanded = ref(new Set<string>())
+type ResourceNode = {
+  id: string
+  name: string
+  nodeType: 'DIRECTORY' | 'TEMPLATE'
+  parentId?: string | null
+  sourceType?: string
+  readOnly?: boolean
+  children?: ResourceNode[]
+}
+
+const props = defineProps<{ nodes: ResourceNode[]; activeId?: string }>()
+const emit = defineEmits(['open', 'create-online', 'create-import', 'create-network', 'create-directory', 'folder', 'rename', 'delete', 'fork', 'download', 'copy-download-link'])
+const treeRef = ref<{ setCurrentKey: (key?: string) => void }>()
+const treeProps = { children: 'children', label: 'name' }
 const templates = computed(() => props.nodes.filter(node => node.nodeType === 'TEMPLATE'))
-const visibleNodes = computed(() => {
-  const children = new Map<string | null, any[]>()
-  for (const node of props.nodes) { const parent = node.parentId || null; children.set(parent, [...(children.get(parent) || []), node]) }
-  const output: Array<{ node: any; depth: number }> = []
-  const walk = (parentId: string | null, depth: number) => {
-    for (const node of (children.get(parentId) || []).sort((a, b) => a.nodeType.localeCompare(b.nodeType) || a.name.localeCompare(b.name, 'zh-CN'))) {
-      output.push({ node, depth })
-      if (node.nodeType === 'DIRECTORY' && expanded.value.has(node.id)) walk(node.id, depth + 1)
-    }
+const treeNodes = computed<ResourceNode[]>(() => {
+  const byId = new Map<string, ResourceNode>()
+  const roots: ResourceNode[] = []
+  for (const source of props.nodes) byId.set(source.id, { ...source, children: [] })
+  for (const node of byId.values()) {
+    const parent = node.parentId ? byId.get(node.parentId) : undefined
+    if (parent?.nodeType === 'DIRECTORY') parent.children?.push(node)
+    else roots.push(node)
   }
-  walk(null, 0); return output
+  const sortNodes = (items: ResourceNode[]) => {
+    items.sort((left, right) => left.nodeType.localeCompare(right.nodeType) || left.name.localeCompare(right.name, 'zh-CN'))
+    items.forEach(node => sortNodes(node.children || []))
+  }
+  sortNodes(roots)
+  return roots
 })
 const sourceLabel = (source?: string) => ({ ONLINE: '在线', UPLOAD: '导入', LOCAL_DIRECTORY: '本地', NETWORK: '网络' } as Record<string, string>)[source || ''] || ''
-const iconFor = (node: any) => node.nodeType === 'DIRECTORY' ? (expanded.value.has(node.id) ? '⌄' : '›') : ({ ONLINE: '▦', UPLOAD: '⇧', LOCAL_DIRECTORY: '▣', NETWORK: '↗' } as Record<string, string>)[String(node.sourceType || '')] || '▦'
-function closeMenus() { createOpen.value = false; moreOpen.value = false; contextNode.value = undefined }
-function choose(action: string) { closeMenus(); if (action === 'blank') emit('blank'); if (action === 'folder') emit('folder'); if (action === 'local') emit('mount-local'); if (action === 'network') emit('mount-network') }
-function open(node: any) { if (node.nodeType === 'DIRECTORY') { const next = new Set(expanded.value); next.has(node.id) ? next.delete(node.id) : next.add(node.id); expanded.value = next } else emit('open', Number(node.id.replace('template-', ''))) }
-function upload(event: Event) { const input = event.target as HTMLInputElement; const file = input.files?.[0]; if (file) emit('upload', file); input.value = '' }
-function rename(node: any) { closeMenus(); const name = window.prompt('新名称', node.name)?.trim(); if (name && name !== node.name) emit('rename', node.id, name) }
-function fork(node: any) { closeMenus(); emit('fork', Number(node.id.replace('template-', ''))) }
-function openContext(node: any, event: MouseEvent) { contextNode.value = node; contextPosition.value = { x: event.clientX, y: event.clientY } }
+
+function open(node: ResourceNode) {
+  if (node.nodeType === 'TEMPLATE') emit('open', Number(node.id.replace('template-', '')))
+}
+function parentDirectoryId(target?: ResourceNode) {
+  if (!target) return undefined
+  return Number(String(target.nodeType === 'DIRECTORY' ? target.id : target.parentId || '').replace('directory-', '')) || undefined
+}
+function createBlank(target?: ResourceNode) { emit('create-online', parentDirectoryId(target)) }
+function createFolder(target?: ResourceNode) { emit('folder', parentDirectoryId(target)) }
+function rename(node: ResourceNode) {
+  emit('rename', node.id, node.name)
+}
+function menuItemsFor(node?: ResourceNode): MenuItem[] {
+  const createItems = (target?: ResourceNode): MenuItem[] => [
+    { label: '在线模板', onClick: () => emit('create-online', parentDirectoryId(target)) },
+    { label: '导入文件', onClick: () => emit('create-import', parentDirectoryId(target)) },
+    { label: '网络模板', onClick: () => emit('create-network', parentDirectoryId(target)) },
+    { label: '本地目录', onClick: () => emit('create-directory', parentDirectoryId(target)) },
+    { label: '新建目录', divided: 'up', onClick: () => createFolder(target) }
+  ]
+  if (!node) return [
+    { label: '创建', children: createItems() }
+  ]
+  if (node.nodeType === 'DIRECTORY') return [
+    { label: '创建', children: createItems(node) },
+    { label: '重命名', divided: 'up', onClick: () => rename(node) },
+    { label: '删除', divided: 'up', customClass: 'danger', onClick: () => emit('delete', node.id) }
+  ]
+  return [
+    { label: '重命名', onClick: () => rename(node) },
+    { label: '下载模板', onClick: () => emit('download', node) },
+    { label: '复制链接', onClick: () => emit('copy-download-link', node) },
+    ...(node.readOnly ? [{ label: '创建可编辑副本', onClick: () => emit('fork', Number(node.id.replace('template-', ''))) }] : []),
+    { label: '删除', divided: 'up', customClass: 'danger', onClick: () => emit('delete', node.id) }
+  ]
+}
+function showContext(node: ResourceNode | undefined, event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  ContextMenu.showContextMenu({
+    x: event.clientX,
+    y: event.clientY,
+    items: menuItemsFor(node),
+    theme: 'flat',
+    customClass: 'export-workshop-context-menu',
+    minWidth: 188,
+    zIndex: 3000,
+    adjustPosition: true
+  })
+}
+function openNodeContext(event: Event, node: ResourceNode) {
+  treeRef.value?.setCurrentKey(node.id)
+  showContext(node, event as MouseEvent)
+}
+function openRootContext(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest('.el-tree-node__content')) return
+  showContext(undefined, event)
+}
 </script>
 
 <style scoped>
-.tree-panel{position:relative;display:flex;min-width:0;min-height:0;flex-direction:column;border-right:1px solid var(--divider);background:var(--surface-raised);color:var(--text)}.resource-header{display:flex;align-items:center;gap:5px;height:46px;padding:7px 8px;border-bottom:1px solid var(--divider);font-size:12px}.resource-header>div:first-child{display:flex;align-items:baseline;gap:6px;margin-right:auto}.resource-header small{color:var(--muted);font-weight:400}.tree-panel button{border:0;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font:inherit}.tree-panel button:hover{background:var(--hover)}.command-group,.menu-anchor{position:relative;display:flex}.split-main,.split-more,.icon-button{height:28px;border:1px solid var(--border)!important;background:var(--surface)!important}.split-main{padding:0 7px;border-radius:4px 0 0 4px!important}.split-more{width:23px;border-left:0!important;border-radius:0 4px 4px 0!important}.icon-button{width:28px;font-weight:700}.command-menu,.context-menu{position:absolute;z-index:20;min-width:175px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px #0002}.command-menu{top:33px;left:0}.menu-right{right:0;left:auto}.command-menu button,.context-menu button{display:block;width:100%;padding:7px 9px;text-align:left;font-size:12px}.hidden{display:none}.tree-content{min-height:0;flex:1;overflow:auto;padding:5px}.tree-node{display:flex;align-items:center;gap:6px;min-height:32px;padding-right:6px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-size:12px}.tree-node:hover{background:var(--hover)}.tree-node.active{border-color:var(--shell-tool-selected-border,var(--accent));background:var(--selection)}.node-icon{width:16px;color:var(--muted);text-align:center}.node-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tree-node>small{padding:2px 4px;border-radius:3px;background:var(--shell-tool-tag-bg,var(--button));color:var(--shell-tool-tag-text,var(--muted));font-size:9px}.node-actions{display:none;gap:1px}.tree-node:hover .node-actions{display:flex}.node-actions button{width:22px;height:22px;color:var(--muted)}.empty{display:grid;justify-items:center;gap:7px;margin:18px 8px;padding:18px 12px;border:1px dashed var(--border);border-radius:6px;color:var(--muted);text-align:center;font-size:11px}.empty strong{color:var(--text);font-size:12px}.empty button{margin-top:3px;padding:6px 10px;background:var(--accent);color:#fff}.context-menu{position:fixed}.context-menu .danger{color:#c24141}
+.tree-panel{position:relative;display:flex;width:100%;height:100%;min-width:0;min-height:0;flex-direction:column;border-right:1px solid var(--divider);background:var(--surface-raised);color:var(--text)}.resource-header{display:flex;align-items:center;gap:5px;height:38px;padding:6px 9px;border-bottom:1px solid var(--divider);font-size:12px}.resource-header>div:first-child{display:flex;align-items:baseline;gap:6px;margin-right:auto}.resource-header small{color:var(--muted);font-weight:400}.context-hint{font-size:10px}.tree-content{min-height:0;flex:1;overflow:auto;padding:5px}.resource-tree{--el-tree-node-hover-bg-color:var(--hover);--el-tree-text-color:var(--text);--el-tree-expand-icon-color:var(--muted);background:transparent;color:var(--text);font:12px var(--font)}.tree-node-content{display:flex;min-width:0;flex:1;align-items:center;gap:7px;padding-right:6px}.node-icon{width:16px;height:16px;color:var(--muted)}.directory-icon{color:#d19a35}.template-icon{color:#5c93ce}.node-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tree-node-content>small{padding:2px 4px;border-radius:3px;background:var(--shell-tool-tag-bg,var(--button));color:var(--shell-tool-tag-text,var(--muted));font-size:9px}.empty{display:grid;justify-items:center;gap:7px;margin:18px 8px;padding:18px 12px;border:1px dashed var(--border);border-radius:6px;color:var(--muted);text-align:center;font-size:11px}.empty strong{color:var(--text);font-size:12px}
+:global(.resource-tree .el-tree-node__content){height:30px;border:1px solid transparent;border-radius:5px}:global(.resource-tree .el-tree-node__content:hover){background:var(--hover)}:global(.resource-tree .el-tree-node.is-current>.el-tree-node__content){border-color:var(--shell-tool-selected-border,var(--accent));background:var(--selection)}:global(.mx-context-menu.export-workshop-context-menu){--mx-menu-backgroud:var(--shell-tool-surface,#fff);--mx-menu-hover-backgroud:var(--shell-tool-hover,#edf2f7);--mx-menu-active-backgroud:var(--shell-tool-hover,#edf2f7);--mx-menu-open-backgroud:var(--shell-tool-hover,#edf2f7);--mx-menu-open-hover-backgroud:var(--shell-tool-hover,#edf2f7);--mx-menu-divider:rgba(148,163,184,.28);--mx-menu-text:var(--shell-text-primary,#172033);--mx-menu-hover-text:var(--shell-text-primary,#172033);--mx-menu-open-text:var(--shell-text-primary,#172033);--mx-menu-open-hover-text:var(--shell-text-primary,#172033);--mx-menu-shadow-color:rgba(15,23,42,.2);--mx-menu-backgroud-radius:6px;padding:3px 0;border:0;box-shadow:0 10px 28px rgba(15,23,42,.2)}:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item){padding:4px 10px;font:11px var(--font,Arial,sans-serif)}:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item .label){font-size:11px}:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item-separator),:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item-sperator){margin:0 10px;padding:3px 0;background:transparent}:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item-separator:after),:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item-sperator:after){background:rgba(148,163,184,.28)}:global(.mx-context-menu.export-workshop-context-menu .mx-context-menu-item.danger){color:#d14d4d}
 </style>
