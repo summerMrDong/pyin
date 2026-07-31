@@ -6,18 +6,12 @@
         <groupId>com.pyin</groupId>
         <artifactId>pyin-config-center</artifactId>
         <version>1.0.0-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
-    <artifactId>pyin-plugins</artifactId>
+    <artifactId>pyin-plugin-state-machine</artifactId>
     <packaging>pom</packaging>
-    <name>pyin-plugins</name>
-
+    <name>pyin-plugin-state-machine</name>
     <modules>
-        <module>pyin-plugin-system</module>
-        <module>pyin-plugin-config</module>
-        <module>pyin-plugin-dict</module>
-        <module>pyin-plugin-file</module>
-        <module>pyin-plugin-export-workshop</module>
-        <module>pyin-plugin-state-machine</module>
+        <module>backend</module>
     </modules>
 </project>

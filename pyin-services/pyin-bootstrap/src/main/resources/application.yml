@@ -51,4 +51,4 @@ pyin:
       bundled-plugins-dir: pyin-distribution-parent/bundled-plugins
       system-plugins-dir: pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/system
       external-plugins-dir: pyin-distribution-parent/runtime/pyin-config-center-runtime/plugins/external
-      embedded-plugin-ids: [system, config, dict, export-workshop]
+      embedded-plugin-ids: [system, config, dict, export-workshop, state-machine]
